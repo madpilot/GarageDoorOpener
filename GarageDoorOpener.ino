@@ -1,24 +1,12 @@
 #include <ESP8266WiFi.h>
 #include <ESP8266mDNS.h>
 #include <PubSubClient.h>
+#include "MQTT.h"
 
 #define OPEN_STATE  1
 #define CLOSED_STATE 0
 #define OPENING_STATE 2
 #define CLOSING_STATE 3
-
-#define STATE_TOPIC "home-assistant/garage"
-#define COMMAND_TOPIC "home-assistant/garage/set"
-
-#define OPEN_COMMAND "OPEN"
-#define CLOSE_COMMAND "CLOSE"
-
-#define OPENED_PAYLOAD "OPENED"
-#define CLOSED_PAYLOAD "CLOSED"
-#define OPENING_PAYLOAD "OPENING"
-#define CLOSING_PAYLOAD "CLOSING"
-
-#define QOS_LEVEL 0
 
 // For debugging
 WiFiServer telnetServer(23);
@@ -52,47 +40,6 @@ void TelnetPrintLn(char *message) {
 // PubSub client
 WiFiClient espClient;
 PubSubClient pubSubClient(espClient);
-void PubSubCallback(char* topic, byte* payload, unsigned int length);
-long lastPubSubConnectionAttempt = 0;
-
-void PubSubSetup() {
-  pubSubClient.setServer("192.168.1.16", 1883);
-  pubSubClient.setCallback(PubSubCallback);
-}
-
-boolean PubSubConnect() {
-  Serial.print("Connecting to MQTT server...");
-  
-  if(!pubSubClient.connect("garage")) {
-    Serial.println("\nCouldn't connect to MQTT server. Will try again in 5 seconds.");
-    return false;
-  }
-  
-  if(!pubSubClient.subscribe(COMMAND_TOPIC, QOS_LEVEL)) {
-    Serial.print("\nUnable to subscribe to ");
-    Serial.println(COMMAND_TOPIC);
-    pubSubClient.disconnect();
-    return false;
-  }
-
-  Serial.println(" Connected.");
-  return true;
-}
-
-void PubSubLoop() {
-  if(!pubSubClient.connected()) {
-    long now = millis();
-
-    if(now - lastPubSubConnectionAttempt > 5000) {
-      lastPubSubConnectionAttempt = now;
-      if(PubSubConnect()) {
-        lastPubSubConnectionAttempt = 0;
-      }
-    }
-  } else {
-    pubSubClient.loop();
-  }
-}
 
 void closeDoor();
 void openDoor();
@@ -116,6 +63,7 @@ void PubSubCallback(char* topic, byte* payload, unsigned int length) {
   }
 }
 
+// WIFI functions
 void connectWifi(const char* ssid, const char* password) {
   int WiFiCounter = 0;
   // We start by connecting to a WiFi network
@@ -187,12 +135,12 @@ void setup() {
   Serial.begin(9600);
   connectWifi("ssid", "password");
   TelnetSetup();
-  PubSubSetup();
+  PubSubSetup(&pubSubClient, PubSubCallback);
 
   pubSubClient.publish(STATE_TOPIC, CLOSED_PAYLOAD);
 }
 
 void loop() {
   TelnetLoop();
-  PubSubLoop();
+  PubSubLoop(&pubSubClient);
 }
