@@ -1,7 +1,14 @@
 #include <ESP8266WiFi.h>
+#include <WiFiClient.h>
 #include <ESP8266mDNS.h>
+#include <ESP8266WebServer.h>
+#include <DNSServer.h>
+#include <EEPROM.h>
+#include <FS.h>
+
 #include <PubSubClient.h>
 #include "MQTT.h"
+#include "configure.h"
 
 #define OPEN_STATE  1
 #define CLOSED_STATE 0
@@ -53,7 +60,7 @@ void PubSubCallback(char* topic, byte* payload, unsigned int length) {
   Serial.print(topic);
   Serial.print(" ");
   Serial.println(p);
-  
+
   if(strcmp(p, CLOSE_COMMAND) == 0) {
     Serial.println("Closing the garage");
     closeDoor();
@@ -64,12 +71,116 @@ void PubSubCallback(char* topic, byte* payload, unsigned int length) {
 }
 
 // WIFI functions
+#define HOSTNAME "garage"
+#define CONFIG_AP_SSID "garage"
+
+const byte DNS_PORT = 53;
+DNSServer dnsServer;
+
+ESP8266WebServer webServer(80);
+
+/*
+IPAddress configIP(192, 168, 4, 1);
+IPAddress configNetmask(255, 255, 255, 0);
+
+void WifiSetup() {
+  Serial.println("Setting up WIFI configuration Network");
+  WiFi.softAPConfig(configIP, configIP, configNetmask);
+  WiFi.softAP(HOSTNAME);
+  delay(500);
+
+  Serial.print("AP IP address: ");
+  Serial.println(WiFi.softAPIP());
+
+  dnsServer.setErrorReplyCode(DNSReplyCode::NoError);
+  dnsServer.start(DNS_PORT, "*", configIP);
+}
+*/
+
+
+void getIndex() {
+  File f = SPIFFS.open("/index.html", "r");
+    
+  webServer.setContentLength(f.size());
+  webServer.send(200, "text/html", "");
+  
+  while(f.available()) {
+    webServer.sendContent(f.readStringUntil('\n'));
+  }
+  
+  f.close();
+}
+
+void getCSS() {
+  File f = SPIFFS.open("/stylesheet.css", "r");
+  
+  webServer.setContentLength(f.size());
+  webServer.send(200, "text/css", "");
+  while(f.available()) {
+    webServer.sendContent(f.readStringUntil('\n'));
+  }
+
+  f.close();
+}
+
+void getJS() {
+  File f = SPIFFS.open("/application.js", "r");
+  
+  webServer.setContentLength(f.size());
+  webServer.send(200, "text/javascript", "");
+  while(f.available()) {
+    webServer.sendContent(f.readStringUntil('\n'));
+  }
+
+  f.close();
+}
+
+void getBrowseJSON() {
+  webServer.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  webServer.sendHeader("Pragma", "no-cache");
+  webServer.sendHeader("Expires", "-1");
+
+  Serial.println("Scanning for WIFI access points");
+
+    int n = WiFi.scanNetworks();
+  webServer.sendContent("[");
+  for (int i = 0; i < n; i++) {
+    webServer.sendContent("{\"ssid\":\"" + WiFi.SSID(i) + "\",\"rssi\":" + WiFi.RSSI(i) + ",\"encryption\":" + String(WiFi.encryptionType(i)) + "}");
+    if(i != n - 1) {
+      webServer.sendContent(",");
+    }
+  }
+  webServer.sendContent("]");
+
+  Serial.println("JSON response sent");
+}
+
+void postSave() {
+  Serial.println("Saving Configuration Settings");
+
+  webServer.sendHeader("Location", "done", true);
+}
+
+void WebServerSetup() {
+  SPIFFS.begin();
+  webServer.on("/", getIndex);
+  webServer.on("/stylesheet.css", getCSS);
+  webServer.on("/application.js", getJS);
+  webServer.on("/browse.json", getBrowseJSON);
+  webServer.on("/save", postSave);
+  webServer.begin();
+}
+
+void WebServerLoop() {
+  webServer.handleClient();
+}
+
 void connectWifi(const char* ssid, const char* password) {
   int WiFiCounter = 0;
   // We start by connecting to a WiFi network
   Serial.println("Connecting to ");
   Serial.println(ssid);
-  
+
   WiFi.disconnect();
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
@@ -112,7 +223,7 @@ void setDoorState(int state) {
       break;
     case CLOSED_STATE:
       pubSubClient.publish(STATE_TOPIC, CLOSED_PAYLOAD);
-      break; 
+      break;
   }
   doorState = state;
 }
@@ -135,6 +246,7 @@ void setup() {
   Serial.begin(9600);
   connectWifi("ssid", "password");
   TelnetSetup();
+  WebServerSetup();
   PubSubSetup(&pubSubClient, PubSubCallback);
 
   pubSubClient.publish(STATE_TOPIC, CLOSED_PAYLOAD);
@@ -143,4 +255,5 @@ void setup() {
 void loop() {
   TelnetLoop();
   PubSubLoop(&pubSubClient);
+  WebServerLoop();
 }
