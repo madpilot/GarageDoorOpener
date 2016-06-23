@@ -4,13 +4,13 @@
   "description": "",
   "main": "application.js",
   "scripts": {
+    "build": "inliner index.html > ../../data/index.html",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "devDependencies": {
-    "clean-css": "^3.4.18",
-    "html-minifier": "^2.1.5",
-    "uglify-js": "^2.6.3"
+    "inliner": "^1.9.2",
+    "uglifyjs": "^2.4.10"
   }
 }

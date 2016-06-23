@@ -100,38 +100,9 @@ void WifiSetup() {
 
 void getIndex() {
   File f = SPIFFS.open("/index.html", "r");
-    
   webServer.setContentLength(f.size());
-  webServer.send(200, "text/html", "");
+  webServer.streamFile(f, "text/html");
   
-  while(f.available()) {
-    webServer.sendContent(f.readStringUntil('\n'));
-  }
-  
-  f.close();
-}
-
-void getCSS() {
-  File f = SPIFFS.open("/stylesheet.css", "r");
-  
-  webServer.setContentLength(f.size());
-  webServer.send(200, "text/css", "");
-  while(f.available()) {
-    webServer.sendContent(f.readStringUntil('\n'));
-  }
-
-  f.close();
-}
-
-void getJS() {
-  File f = SPIFFS.open("/application.js", "r");
-  
-  webServer.setContentLength(f.size());
-  webServer.send(200, "text/javascript", "");
-  while(f.available()) {
-    webServer.sendContent(f.readStringUntil('\n'));
-  }
-
   f.close();
 }
 
@@ -157,15 +128,17 @@ void getBrowseJSON() {
 
 void postSave() {
   Serial.println("Saving Configuration Settings");
-
-  webServer.sendHeader("Location", "done", true);
+  Serial.print("Sent ");
+  Serial.println(webServer.arg("ssid"));
+  Serial.print("Passkey ");
+  Serial.println(webServer.arg("passkey"));
+  
+  webServer.send(200, "text/plain", "done");
 }
 
 void WebServerSetup() {
   SPIFFS.begin();
   webServer.on("/", getIndex);
-  webServer.on("/stylesheet.css", getCSS);
-  webServer.on("/application.js", getJS);
   webServer.on("/browse.json", getBrowseJSON);
   webServer.on("/save", postSave);
   webServer.begin();
@@ -244,7 +217,7 @@ void closeDoor() {
 
 void setup() {
   Serial.begin(9600);
-  connectWifi("ssid", "password");
+  connectWifi("ssid", "passkey");
   TelnetSetup();
   WebServerSetup();
   PubSubSetup(&pubSubClient, PubSubCallback);
