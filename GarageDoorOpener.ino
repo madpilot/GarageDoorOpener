@@ -8,41 +8,11 @@
 
 #include <PubSubClient.h>
 #include "MQTT.h"
-#include "configure.h"
 
 #define OPEN_STATE  1
 #define CLOSED_STATE 0
 #define OPENING_STATE 2
 #define CLOSING_STATE 3
-
-// For debugging
-WiFiServer telnetServer(23);
-WiFiClient telnetClient;
-
-void TelnetSetup() {
-  telnetServer.begin();
-  telnetServer.setNoDelay(true);
-}
-
-void TelnetLoop() {
-  if (telnetServer.hasClient()) {
-    if (!telnetClient || !telnetClient.connected()) {
-      Serial.println("New client connected");
-      telnetClient = telnetServer.available();
-      telnetClient.flush();
-    }
-  } else {
-    if(telnetClient && telnetClient.connected()) {
-      telnetClient.stop();
-    }
-  }
-}
-
-void TelnetPrintLn(char *message) {
-  if(telnetClient && telnetClient.connected()) {
-    telnetClient.println(message);
-  }
-}
 
 // PubSub client
 WiFiClient espClient;
@@ -102,7 +72,7 @@ void getIndex() {
   File f = SPIFFS.open("/index.html", "r");
   webServer.setContentLength(f.size());
   webServer.streamFile(f, "text/html");
-  
+
   f.close();
 }
 
@@ -132,7 +102,7 @@ void postSave() {
   Serial.println(webServer.arg("ssid"));
   Serial.print("Passkey ");
   Serial.println(webServer.arg("passkey"));
-  
+
   webServer.send(200, "text/plain", "done");
 }
 
@@ -217,8 +187,7 @@ void closeDoor() {
 
 void setup() {
   Serial.begin(9600);
-  connectWifi("ssid", "passkey");
-  TelnetSetup();
+  connectWifi("ssid", "password");
   WebServerSetup();
   PubSubSetup(&pubSubClient, PubSubCallback);
 
@@ -226,7 +195,6 @@ void setup() {
 }
 
 void loop() {
-  TelnetLoop();
   PubSubLoop(&pubSubClient);
   WebServerLoop();
 }
