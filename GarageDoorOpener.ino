@@ -5,6 +5,7 @@
 #include <DNSServer.h>
 #include <EEPROM.h>
 #include <FS.h>
+#include "WiFiManager.h" 
 
 #include <PubSubClient.h>
 #include "MQTT.h"
@@ -118,32 +119,15 @@ void WebServerLoop() {
   webServer.handleClient();
 }
 
-void connectWifi(const char* ssid, const char* password) {
-  int WiFiCounter = 0;
-  // We start by connecting to a WiFi network
-  Serial.println("Connecting to ");
-  Serial.println(ssid);
-
-  WiFi.disconnect();
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED && WiFiCounter < 30) {
-    delay(1000);
-    WiFiCounter++;
-    Serial.print(".");
-  }
-
-  Serial.println("");
-  Serial.println("WiFi connected");
-  Serial.println("IP address: ");
-  Serial.println(WiFi.localIP());
-
-  if (!MDNS.begin("garage")) {
+void setNetworkName(const char *name) {
+  if (!MDNS.begin(name)) {
     Serial.println("Couldn't set mDNS name");
     return;
   }
 
-  Serial.println("Device is available at garage.local");
+  Serial.print("Device is available at ");
+  Serial.print(name);
+  Serial.println(".local");
 }
 
 
@@ -185,16 +169,33 @@ void closeDoor() {
   }
 }
 
+bool inAutoConfig = false;
+bool inManualConfig = true;
+
 void setup() {
   Serial.begin(9600);
-  connectWifi("ssid", "password");
-  WebServerSetup();
-  PubSubSetup(&pubSubClient, PubSubCallback);
+  WiFiManager wifiManager;
 
-  pubSubClient.publish(STATE_TOPIC, CLOSED_PAYLOAD);
+  if(inManualConfig) {
+    wifiManager.startConfigPortal("garage", "door");
+    return;
+  }
+  
+  if(wifiManager.autoConnect("garage", "door")) {  
+    setNetworkName("garage");
+    WebServerSetup();
+    PubSubSetup(&pubSubClient, PubSubCallback);
+    pubSubClient.publish(STATE_TOPIC, CLOSED_PAYLOAD);
+  } else {
+    inAutoConfig = true;
+  }
 }
 
 void loop() {
+  if(inAutoConfig || inManualConfig) {
+    return;
+  }
+  
   PubSubLoop(&pubSubClient);
   WebServerLoop();
 }
