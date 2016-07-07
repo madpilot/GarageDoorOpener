@@ -5,6 +5,7 @@
 #include <DNSServer.h>
 #include <EEPROM.h>
 #include <FS.h>
+
 #include "WiFiManager.h" 
 
 #include <PubSubClient.h>
@@ -108,7 +109,6 @@ void postSave() {
 }
 
 void WebServerSetup() {
-  SPIFFS.begin();
   webServer.on("/", getIndex);
   webServer.on("/browse.json", getBrowseJSON);
   webServer.on("/save", postSave);
@@ -119,7 +119,9 @@ void WebServerLoop() {
   webServer.handleClient();
 }
 
-void setNetworkName(const char *name) {
+void setNetworkName(char *name) {
+  wifi_station_set_hostname(name);
+  
   if (!MDNS.begin(name)) {
     Serial.println("Couldn't set mDNS name");
     return;
@@ -169,33 +171,58 @@ void closeDoor() {
   }
 }
 
-bool inAutoConfig = false;
-bool inManualConfig = true;
+bool configMode = false;
+
+#define DEFAULT_SSID "garage"
+const char *config = "/config.ini";
 
 void setup() {
   Serial.begin(9600);
+  SPIFFS.begin();
+
+  const char *username = "admin";
+  const char *password = "admin";
+  const char *mqtt_server = "";
+  const char *mqtt_port = "1883";
+  const char *device_name = "garage";
+  
   WiFiManager wifiManager;
 
-  if(inManualConfig) {
-    wifiManager.startConfigPortal("garage", "door");
+  WiFiManagerParameter username_parameter("username", "Username", username, 63);
+  wifiManager.addParameter(&username_parameter);
+
+  WiFiManagerParameter password_parameter("password", "Password", password, 63);
+  wifiManager.addParameter(&password_parameter);
+  
+  WiFiManagerParameter mqtt_server_parameter("mqtt_server", "MQTT Server", mqtt_server, 63);
+  wifiManager.addParameter(&mqtt_server_parameter);
+
+  WiFiManagerParameter mqtt_port_parameter("mqtt_port", "MQTT Port", mqtt_port, 5);
+  wifiManager.addParameter(&mqtt_port_parameter);
+
+  WiFiManagerParameter device_name_parameter("device_name", "Device name", device_name, 63);
+  wifiManager.addParameter(&device_name_parameter);
+
+  
+
+  if(configMode) {
+    wifiManager.startConfigPortal(DEFAULT_SSID);
     return;
   }
   
-  if(wifiManager.autoConnect("garage", "door")) {  
-    setNetworkName("garage");
-    WebServerSetup();
+  if(wifiManager.autoConnect(DEFAULT_SSID)) {
+    setNetworkName((char *)device_name);
     PubSubSetup(&pubSubClient, PubSubCallback);
     pubSubClient.publish(STATE_TOPIC, CLOSED_PAYLOAD);
   } else {
-    inAutoConfig = true;
+    configMode = true;
   }
 }
 
 void loop() {
-  if(inAutoConfig || inManualConfig) {
+  if(configMode) {
     return;
   }
   
   PubSubLoop(&pubSubClient);
-  WebServerLoop();
 }
