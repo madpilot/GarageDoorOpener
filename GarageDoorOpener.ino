@@ -3,13 +3,12 @@
 #include <ESP8266mDNS.h>
 #include <ESP8266WebServer.h>
 #include <DNSServer.h>
-#include <EEPROM.h>
-#include <FS.h>
 
 #include "WiFiManager.h" 
-
-#include <PubSubClient.h>
+#include "Config.h"
 #include "MQTT.h"
+
+#define DEFAULT_SSID "garage"
 
 #define OPEN_STATE  1
 #define CLOSED_STATE 0
@@ -46,81 +45,8 @@ void PubSubCallback(char* topic, byte* payload, unsigned int length) {
 #define HOSTNAME "garage"
 #define CONFIG_AP_SSID "garage"
 
-const byte DNS_PORT = 53;
-DNSServer dnsServer;
-
-ESP8266WebServer webServer(80);
-
-/*
-IPAddress configIP(192, 168, 4, 1);
-IPAddress configNetmask(255, 255, 255, 0);
-
-void WifiSetup() {
-  Serial.println("Setting up WIFI configuration Network");
-  WiFi.softAPConfig(configIP, configIP, configNetmask);
-  WiFi.softAP(HOSTNAME);
-  delay(500);
-
-  Serial.print("AP IP address: ");
-  Serial.println(WiFi.softAPIP());
-
-  dnsServer.setErrorReplyCode(DNSReplyCode::NoError);
-  dnsServer.start(DNS_PORT, "*", configIP);
-}
-*/
-
-
-void getIndex() {
-  File f = SPIFFS.open("/index.html", "r");
-  webServer.setContentLength(f.size());
-  webServer.streamFile(f, "text/html");
-
-  f.close();
-}
-
-void getBrowseJSON() {
-  webServer.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-  webServer.sendHeader("Pragma", "no-cache");
-  webServer.sendHeader("Expires", "-1");
-
-  Serial.println("Scanning for WIFI access points");
-
-    int n = WiFi.scanNetworks();
-  webServer.sendContent("[");
-  for (int i = 0; i < n; i++) {
-    webServer.sendContent("{\"ssid\":\"" + WiFi.SSID(i) + "\",\"rssi\":" + WiFi.RSSI(i) + ",\"encryption\":" + String(WiFi.encryptionType(i)) + "}");
-    if(i != n - 1) {
-      webServer.sendContent(",");
-    }
-  }
-  webServer.sendContent("]");
-
-  Serial.println("JSON response sent");
-}
-
-void postSave() {
-  Serial.println("Saving Configuration Settings");
-  Serial.print("Sent ");
-  Serial.println(webServer.arg("ssid"));
-  Serial.print("Passkey ");
-  Serial.println(webServer.arg("passkey"));
-
-  webServer.send(200, "text/plain", "done");
-}
-
-void WebServerSetup() {
-  webServer.on("/", getIndex);
-  webServer.on("/browse.json", getBrowseJSON);
-  webServer.on("/save", postSave);
-  webServer.begin();
-}
-
-void WebServerLoop() {
-  webServer.handleClient();
-}
-
-void setNetworkName(char *name) {
-  wifi_station_set_hostname(name);
+void setNetworkName(const char *name) {
+  wifi_station_set_hostname((char *)name);
   
   if (!MDNS.begin(name)) {
     Serial.println("Couldn't set mDNS name");
@@ -172,51 +98,90 @@ void closeDoor() {
 }
 
 bool configMode = false;
+Config config;
 
-#define DEFAULT_SSID "garage"
-const char *config = "/config.ini";
-
-void setup() {
-  Serial.begin(9600);
-  SPIFFS.begin();
-
-  const char *username = "admin";
-  const char *password = "admin";
-  const char *mqtt_server = "";
-  const char *mqtt_port = "1883";
-  const char *device_name = "garage";
+void configSetup() {
+  config.addKey("deviceName", DEFAULT_SSID, 63);
   
+  config.addKey("mqttServer", "", 255);
+  config.addKey("mqttPort", "8123", 6);
+  config.addKey("mqttUsername", "", 31);
+  config.addKey("mqttPassword", "", 31);
+  
+  config.addKey("cert", "", 1024);
+  config.addKey("certKey", "", 1024);
+  
+  config.read();
+}
+
+int saveFlag = false;
+void saveCallback() {
+  saveFlag = true;
+}
+
+void wifiSetup() {
   WiFiManager wifiManager;
 
-  WiFiManagerParameter username_parameter("username", "Username", username, 63);
-  wifiManager.addParameter(&username_parameter);
+  // Need an iterator
+  ConfigOption *deviceName = config.get("deviceName");
+  WiFiManagerParameter deviceName_parameter(deviceName->getKey(), deviceName->getValue(), deviceName->getLength());
+  wifiManager.addParameter(&deviceName_parameter);
 
-  WiFiManagerParameter password_parameter("password", "Password", password, 63);
-  wifiManager.addParameter(&password_parameter);
+  ConfigOption *mqttServer = config.get("mqttServer");
+  WiFiManagerParameter mqttServer_parameter(mqttServer->getKey(), mqttServer->getValue(), mqttServer->getLength());
+  wifiManager.addParameter(&mqttServer_parameter);
+
+  ConfigOption *mqttPort = config.get("mqttPort");
+  WiFiManagerParameter mqttPort_parameter(mqttPort->getKey(), mqttPort->getValue(), mqttPort->getLength());
+  wifiManager.addParameter(&mqttPort_parameter);
+
+  ConfigOption *mqttUsername = config.get("mqttUsername");
+  WiFiManagerParameter mqttUsername_parameter(mqttUsername->getKey(), mqttUsername->getValue(), mqttUsername->getLength());
+  wifiManager.addParameter(&mqttUsername_parameter);
+
+  ConfigOption *mqttPassword = config.get("mqttPassword");
+  WiFiManagerParameter mqttPassword_parameter(mqttPassword->getKey(), mqttPassword->getValue(), mqttPassword->getLength());
+  wifiManager.addParameter(&mqttPassword_parameter);
+
+  ConfigOption *cert = config.get("cert");
+  WiFiManagerParameter cert_parameter(cert->getKey(), cert->getValue(), cert->getLength());
+  wifiManager.addParameter(&cert_parameter);
+
+  ConfigOption *certKey = config.get("certKey");
+  WiFiManagerParameter certKey_parameter(certKey->getKey(), certKey->getValue(), certKey->getLength());
+  wifiManager.addParameter(&certKey_parameter);
+
+  wifiManager.setSaveConfigCallback(saveCallback);
   
-  WiFiManagerParameter mqtt_server_parameter("mqtt_server", "MQTT Server", mqtt_server, 63);
-  wifiManager.addParameter(&mqtt_server_parameter);
-
-  WiFiManagerParameter mqtt_port_parameter("mqtt_port", "MQTT Port", mqtt_port, 5);
-  wifiManager.addParameter(&mqtt_port_parameter);
-
-  WiFiManagerParameter device_name_parameter("device_name", "Device name", device_name, 63);
-  wifiManager.addParameter(&device_name_parameter);
-
-  
-
   if(configMode) {
-    wifiManager.startConfigPortal(DEFAULT_SSID);
-    return;
+    Serial.println("Going in to config mode");
+    wifiManager.startConfigPortal(CONFIG_AP_SSID);
+  } else {  
+    wifiManager.autoConnect(CONFIG_AP_SSID);
   }
+
+  deviceName->setValue(deviceName_parameter.getValue());
+  mqttServer->setValue(mqttServer_parameter.getValue());
+  mqttPort->setValue(mqttPort_parameter.getValue());
+  mqttUsername->setValue(mqttUsername_parameter.getValue());
+  mqttPassword->setValue(mqttPassword_parameter.getValue());
+  cert->setValue(cert_parameter.getValue());
+  certKey->setValue(certKey_parameter.getValue());
   
-  if(wifiManager.autoConnect(DEFAULT_SSID)) {
-    setNetworkName((char *)device_name);
-    PubSubSetup(&pubSubClient, PubSubCallback);
-    pubSubClient.publish(STATE_TOPIC, CLOSED_PAYLOAD);
-  } else {
-    configMode = true;
+  if(saveFlag) {
+    config.write();
   }
+    
+  setNetworkName(deviceName->getValue());
+}
+
+void setup() {
+  Serial.begin(115200);
+  configSetup();
+  wifiSetup();
+  
+  PubSubSetup(&pubSubClient, PubSubCallback);
+  pubSubClient.publish(STATE_TOPIC, CLOSED_PAYLOAD);
 }
 
 void loop() {
