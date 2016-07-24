@@ -20,7 +20,7 @@ int ConfigOption::getLength() {
   return _maxLength;
 }
 
-void ConfigOption::setValue(const char *value) {
+void ConfigOption::setValue(const char *value) {  
   _value = new char[_maxLength + 1];
   
   for(int i = 0; i < _maxLength; i++) {
@@ -94,7 +94,8 @@ config_result Config::write() {
   }
   
   if (SPIFFS.begin()) {
-    File configFile = SPIFFS.open(CONFIG_FILE_PATH, "w+");
+    File configFile = SPIFFS.open(CONFIG_FILE_PATH, "w+");;
+    
     root.printTo(configFile);
     configFile.close();
     return E_CONFIG_OK;

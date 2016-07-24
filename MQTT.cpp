@@ -1,7 +1,12 @@
 #include "MQTT.h"
+#include "client_cert.h"
+#include "client_key.h"
 
-PubSub::PubSub(const char *server, int port, const char *deviceName) {
-  WiFiClient *wifi = new WiFiClient();
+
+PubSub::PubSub(const char *server, int port, const char *deviceName) {  
+  WiFiClientSecure *wifi = new WiFiClientSecure();
+  wifi->setCertificate(client_cert, client_cert_len);
+  wifi->setPrivateKey(client_key, client_key_len);
   
   _server = server;
   _port = port;
@@ -76,13 +81,19 @@ mqtt_result PubSub::publish(const char *message) {
   }
 }
 
+int lastConnectionAttempt = 0;
+
 void PubSub::loop() {
+  Serial.println("Looping");
   if(!client->connected()) {
+    Serial.println("Not connected");
+
     long now = millis();
 
     if(now - lastConnectionAttempt > 5000) {
       lastConnectionAttempt = now;
       if(this->connect() == E_MQTT_OK) {
+        Serial.println("Connected");
         lastConnectionAttempt = 0;
       }
     }
