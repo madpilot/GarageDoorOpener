@@ -22,8 +22,9 @@ int ConfigOption::getLength() {
 
 void ConfigOption::setValue(const char *value) {  
   _value = new char[_maxLength + 1];
-  
-  for(int i = 0; i < _maxLength; i++) {
+
+  // NULL out the string, including a terminator
+  for(int i = 0; i < _maxLength + 1; i++) {
     _value[i] = '\0';
   }
 
@@ -63,6 +64,8 @@ config_result Config::read() {
         DynamicJsonBuffer buf;
         JsonObject &root = buf.parseObject(json.get());
         
+        root.printTo(Serial);
+        
         if(root.success()) {
           for(int i = 0; i < _optionCount; i++) {
             _options[i]->setValue(root[_options[i]->getKey()]);
@@ -92,7 +95,7 @@ config_result Config::write() {
   for(int i = 0; i < _optionCount; i++) {
     root[_options[i]->getKey()] = _options[i]->getValue();
   }
-  
+
   if (SPIFFS.begin()) {
     File configFile = SPIFFS.open(CONFIG_FILE_PATH, "w+");;
     

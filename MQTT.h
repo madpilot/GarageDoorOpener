@@ -42,7 +42,7 @@ class PubSub {
     const char   *_publishChannel;
     int           _qosLevel;
     
-    PubSubClient *client;
+    //PubSubClient *client;
     long          lastConnectionAttempt;
 };
 #endif

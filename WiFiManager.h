@@ -25,7 +25,7 @@ extern "C" {
   #include "user_interface.h"
 }
 
-#define WIFI_MANAGER_MAX_PARAMS 14
+#define WIFI_MANAGER_MAX_PARAMS 17
 
 class WiFiManagerParameter {
   public:

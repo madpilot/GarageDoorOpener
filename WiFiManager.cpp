@@ -21,11 +21,12 @@ void WiFiManagerParameter::init(const char *id, const char *defaultValue, int le
   _id = id;
   _length = length;
   _value = new char[length + 1];
-  
-  for (int i = 0; i < length; i++) {
+
+  // Blank out the string, including a terminator
+  for (int i = 0; i < _length + 1; i++) {
     _value[i] = 0;
   }
-  
+
   if (defaultValue != NULL) {
     strncpy(_value, defaultValue, length);
   }
@@ -404,7 +405,7 @@ void WiFiManager::handleConfig() {
     root[_params[i]->getID()] = _params[i]->getValue();
   }
   
-  char json[root.measureLength()];
+  char json[root.measureLength() + 1];
   root.printTo(json, sizeof(json));
   server->send(200, "application/json", json);
   DEBUG_WM(F("JSON response sent"));
@@ -413,8 +414,6 @@ void WiFiManager::handleConfig() {
 /** Handle the WLAN save form and redirect to WLAN config page again */
 void WiFiManager::handleWifiSave() {
   DEBUG_WM(F("WiFi save"));
-
-  Serial.println(server->arg("plain"));
 
   String text = server->arg("plain");
   
@@ -431,18 +430,20 @@ void WiFiManager::handleWifiSave() {
       }
       
       //read parameter
-      String value = root[_params[i]->getID()].asString();;
+      String value = root[_params[i]->getID()].asString();
       //store it in array
-      value.toCharArray(_params[i]->_value, _params[i]->_length);
+      value.toCharArray(_params[i]->_value, _params[i]->_length + 1);
+      value[_params[i]->_length] = 0;
+      
       DEBUG_WM(F("Parameter"));
       DEBUG_WM(_params[i]->getID());
       DEBUG_WM(value);
     }
     
-    Serial.println("Done!");
+    DEBUG_WM(F("Done!"));
     server->send(200, "text/html", "done");
   } else {
-    Serial.println("Unable to parse JSON");
+    DEBUG_WM(F("Unable to parse JSON"));
     server->send(500, "text/html", "Error!");
   }
   

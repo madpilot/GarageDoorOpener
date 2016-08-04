@@ -35,8 +35,9 @@
 #define TLS_YES "1"
 
 #define RELAY_CLOSE_TIME 100
-#define RELAY            1
-#define OPENED_SWITCH    2
+#define RELAY_GND        0
+#define RELAY            2
+#define OPENED_SWITCH    1
 #define CLOSED_SWITCH    3
 
 int saveFlag = false;
@@ -126,9 +127,10 @@ void trigger() {
 
 void readDoorLoop() {
   int current = getDoorState();
-  int opened = digitalRead(OPENED_SWITCH);
-  int closed = digitalRead(CLOSED_SWITCH);
-
+  // Inverted because we pull them low when switches are closed
+  int opened = !digitalRead(OPENED_SWITCH);
+  int closed = !digitalRead(CLOSED_SWITCH);
+  
   if(opened && !closed) {
     // Fully opened
     if(current != OPEN_STATE) {
@@ -141,9 +143,9 @@ void readDoorLoop() {
     }
   } else if(!opened && !closed) {
     // Either opening or closing
-    if(current == CLOSED) {
+    if(current == OPEN_STATE) {
       setDoorState(CLOSING_STATE);
-    } else if(current == OPEN_STATE) {
+    } else if(current == CLOSED_STATE) {
       setDoorState(OPENING_STATE);
     }
   }
@@ -174,26 +176,46 @@ void closeDoor() {
 }
 
 void configSetup() {
-  config.addKey("deviceName", DEFAULT_SSID, 63);
+  config.addKey("ssid", "", 32);
+  config.addKey("passkey", "", 32);
+  config.addKey("encryption", "0", 1);
   
-  config.addKey("mqttServer", "", 255);
+  config.addKey("mqttDeviceName", DEFAULT_SSID, 64);
+  
+  config.addKey("mqttServer", "", 256);
   config.addKey("mqttPort", "1883", 6);
 
   config.addKey("mqttAuthMode", AUTH_MODE_NONE, 1);
   config.addKey("mqttTLS", TLS_NO, 1);
   
-  config.addKey("mqttUsername", "", 31);
-  config.addKey("mqttPassword", "", 31);
+  config.addKey("mqttUsername", "", 32);
+  config.addKey("mqttPassword", "", 32);
   
-  config.addKey("mqttSubscribeChannel", SUBSCRIBE_CHANNEL, 31);
-  config.addKey("mqttPublishChannel", PUBLISH_CHANNEL, 31);
-  config.addKey("mqttRequestChannel", REQUEST_CHANNEL, 31);
+  config.addKey("mqttSubscribeChannel", SUBSCRIBE_CHANNEL, 32);
+  config.addKey("mqttPublishChannel", PUBLISH_CHANNEL, 32);
+  config.addKey("mqttRequestChannel", REQUEST_CHANNEL, 32);
   
-  config.addKey("cert", "", 1024);
-  config.addKey("certKey", "", 1024);
-  config.addKey("serverFingerprint", "", 63);
+  config.addKey("mqttCert", "", 2048);
+  config.addKey("mqttCertKey", "", 2048);
+  config.addKey("mqttFingerprint", "", 64);
   
-  config.read();
+  switch(config.read()) {
+    case E_CONFIG_OK:
+      Serial.println("Config read");
+      return;
+    case E_CONFIG_FS_ACCESS:
+      Serial.println("E_CONFIG_FS_ACCESS: Couldn't access file system");
+      return;
+    case E_CONFIG_FILE_NOT_FOUND:
+      Serial.println("E_CONFIG_FILE_NOT_FOUND: File not found");
+      return;
+    case E_CONFIG_FILE_OPEN:
+      Serial.println("E_CONFIG_FILE_OPEN: Couldn't open file");
+      return;
+    case E_CONFIG_PARSE_ERROR:
+      Serial.println("E_CONFIG_PARSE_ERROR: File was not parsable");
+      return;
+  }
 }
 
 void saveCallback() {
@@ -204,10 +226,21 @@ void wifiSetup() {
   WiFiManager wifiManager;
 
   // Need an iterator
-  ConfigOption *deviceName = config.get("deviceName");
-  WiFiManagerParameter deviceName_parameter(deviceName->getKey(), deviceName->getValue(), deviceName->getLength());
-  wifiManager.addParameter(&deviceName_parameter);
+  ConfigOption *ssid = config.get("ssid");
+  WiFiManagerParameter ssid_parameter(ssid->getKey(), ssid->getValue(), ssid->getLength());
+  wifiManager.addParameter(&ssid_parameter);
 
+  ConfigOption *passkey = config.get("passkey");
+  WiFiManagerParameter passkey_parameter(passkey->getKey(), passkey->getValue(), passkey->getLength());
+  wifiManager.addParameter(&passkey_parameter);
+
+  ConfigOption *encryption = config.get("encryption");
+  WiFiManagerParameter encryption_parameter(encryption->getKey(), encryption->getValue(), encryption->getLength());
+  wifiManager.addParameter(&encryption_parameter);
+  
+  ConfigOption *mqttDeviceName = config.get("mqttDeviceName");
+  WiFiManagerParameter mqttDeviceName_parameter(mqttDeviceName->getKey(), mqttDeviceName->getValue(), mqttDeviceName->getLength());
+  wifiManager.addParameter(&mqttDeviceName_parameter);
 
   ConfigOption *mqttServer = config.get("mqttServer");
   WiFiManagerParameter mqttServer_parameter(mqttServer->getKey(), mqttServer->getValue(), mqttServer->getLength());
@@ -245,20 +278,20 @@ void wifiSetup() {
   WiFiManagerParameter mqttRequestChannel_parameter(mqttRequestChannel->getKey(), mqttRequestChannel->getValue(), mqttRequestChannel->getLength());
   wifiManager.addParameter(&mqttRequestChannel_parameter);
 
-  ConfigOption *cert = config.get("cert");
-  WiFiManagerParameter cert_parameter(cert->getKey(), cert->getValue(), cert->getLength());
-  wifiManager.addParameter(&cert_parameter);
+  ConfigOption *mqttCert = config.get("mqttCert");
+  WiFiManagerParameter mqttCert_parameter(mqttCert->getKey(), mqttCert->getValue(), mqttCert->getLength());
+  wifiManager.addParameter(&mqttCert_parameter);
 
-  ConfigOption *certKey = config.get("certKey");
-  WiFiManagerParameter certKey_parameter(certKey->getKey(), certKey->getValue(), certKey->getLength());
-  wifiManager.addParameter(&certKey_parameter);
+  ConfigOption *mqttCertKey = config.get("mqttCertKey");
+  WiFiManagerParameter mqttCertKey_parameter(mqttCertKey->getKey(), mqttCertKey->getValue(), mqttCertKey->getLength());
+  wifiManager.addParameter(&mqttCertKey_parameter);
 
-  ConfigOption *serverFingerprint = config.get("serverFingerprint");
-  WiFiManagerParameter serverFingerprint_parameter(serverFingerprint->getKey(), serverFingerprint->getValue(), serverFingerprint->getLength());
-  wifiManager.addParameter(&serverFingerprint_parameter);
+  ConfigOption *mqttFingerprint = config.get("mqttFingerprint");
+  WiFiManagerParameter mqttFingerprint_parameter(mqttFingerprint->getKey(), mqttFingerprint->getValue(), mqttFingerprint->getLength());
+  wifiManager.addParameter(&mqttFingerprint_parameter);
   
   wifiManager.setSaveConfigCallback(saveCallback);
-
+;
   if(configMode) {
     Serial.println("Going in to config mode");
     wifiManager.startConfigPortal(CONFIG_AP_SSID);
@@ -266,7 +299,11 @@ void wifiSetup() {
     wifiManager.autoConnect(CONFIG_AP_SSID);
   }
 
-  deviceName->setValue(deviceName_parameter.getValue());
+  ssid->setValue(ssid_parameter.getValue());
+  passkey->setValue(passkey_parameter.getValue());
+  encryption->setValue(encryption_parameter.getValue());
+  
+  mqttDeviceName->setValue(mqttDeviceName_parameter.getValue());
   
   mqttServer->setValue(mqttServer_parameter.getValue());
   mqttPort->setValue(mqttPort_parameter.getValue());
@@ -280,33 +317,46 @@ void wifiSetup() {
   mqttSubscribeChannel->setValue(mqttSubscribeChannel_parameter.getValue());
   mqttRequestChannel->setValue(mqttRequestChannel_parameter.getValue());
   
-  cert->setValue(cert_parameter.getValue());
-  certKey->setValue(certKey_parameter.getValue());
-  serverFingerprint->setValue(serverFingerprint_parameter.getValue());
+  mqttCert->setValue(mqttCert_parameter.getValue());
+  mqttCertKey->setValue(mqttCertKey_parameter.getValue());
+  mqttFingerprint->setValue(mqttFingerprint_parameter.getValue());
 
   if(saveFlag) {
     config.write();
   }
     
-  setNetworkName(deviceName->getValue());
+  setNetworkName(mqttDeviceName->getValue());
 }
 
 void pubSubSetup() {
-  pubSub = new PubSub(config.get("mqttServer")->getValue(), atoi(config.get("mqttPort")->getValue()), config.get("deviceName")->getValue());
-  
+  //pubSub = new PubSub(config.get("mqttServer")->getValue(), atoi(config.get("mqttPort")->getValue()), config.get("deviceName")->getValue());
+  pubSub = new PubSub("192.168.1.15", 1883, "garage");
   pubSub->setCallback(pubSubCallback);
+  pubSub->setSubscribeChannel("home-assistant/garage/set");
+  pubSub->setPublishChannel("home-assistant/garage");
+  /*
   pubSub->setSubscribeChannel(config.get("mqttSubscribeChannel")->getValue());
   pubSub->setPublishChannel(config.get("mqttPublishChannel")->getValue());
   pubSub->setAuthentication(config.get("mqttUsername")->getValue(), config.get("mqttPassword")->getValue());
   pubSub->setCertificate(config.get("cert")->getValue(), config.get("certKey")->getValue());
+  */
 }
 
 
 void setup() {
   Serial.begin(115200);
+  
+  pinMode(RELAY_GND, OUTPUT);
+  pinMode(RELAY, OUTPUT);
+  pinMode(CLOSED_SWITCH, INPUT);
+  pinMode(OPENED_SWITCH, INPUT);
+  
+  digitalWrite(RELAY, LOW);
+  digitalWrite(RELAY_GND, LOW);
+  
   configSetup();
   wifiSetup();
-  //pubSubSetup();
+  pubSubSetup();
 }
 
 void loop() {
@@ -314,7 +364,7 @@ void loop() {
     return;
   }
   
-  //pubSub->loop();
-  //triggerLoop();
-  //readDoorLoop();
+  pubSub->loop();
+  triggerLoop();
+  readDoorLoop();
 }

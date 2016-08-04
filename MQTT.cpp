@@ -1,16 +1,18 @@
 #include "MQTT.h"
-#include "client_cert.h"
-#include "client_key.h"
 
+WiFiClient wifi;
+PubSubClient client(wifi);
 
 PubSub::PubSub(const char *server, int port, const char *deviceName) {  
-  WiFiClientSecure *wifi = new WiFiClientSecure();
-  wifi->setCertificate(client_cert, client_cert_len);
-  wifi->setPrivateKey(client_key, client_key_len);
+  //WiFiClient *wifi = new WiFiClient();
+  //WiFiClientSecure *wifi = new WiFiClientSecure();
+  //wifi->setCertificate(client_cert, client_cert_len);
+  //wifi->setPrivateKey(client_key, client_key_len);
   
   _server = server;
   _port = port;
   _deviceName = deviceName;
+  /*
   _username = NULL;
   _password = NULL;
   _cert = NULL;
@@ -18,14 +20,16 @@ PubSub::PubSub(const char *server, int port, const char *deviceName) {
   _publishChannel = NULL;
   _subscribeChannel = NULL;
   _qosLevel = 0;
-  
-  
-  client = new PubSubClient((Client &)wifi);
-  client->setServer(server, port);
+  */
+  Serial.println(server);
+  Serial.println(port);
+  //client = new PubSubClient((Client &)wifi);
+  //client->setServer(server, port);
+  client.setServer(server, port);
 }
 
 void PubSub::setCallback(MQTT_CALLBACK_SIGNATURE) {
-  client->setCallback(callback);
+  client.setCallback(callback);
 }
 
 void PubSub::setSubscribeChannel(const char *channel) {
@@ -49,16 +53,16 @@ void PubSub::setCertificate(const char *cert, const char *certKey) {
 mqtt_result PubSub::connect() {
   Serial.print("Connecting to MQTT server...");
 
-  if(!client->connect(_deviceName)) {
+  if(!client.connect(_deviceName)) {
     Serial.println("\nCouldn't connect to MQTT server. Will try again in 5 seconds.");
     return E_MQTT_CONNECT;
   }
 
   if(_subscribeChannel != NULL && _subscribeChannel != "") {
-    if(!client->subscribe(_subscribeChannel, _qosLevel)) {
+    if(!client.subscribe(_subscribeChannel, _qosLevel)) {
       Serial.print("\nUnable to subscribe to ");
       Serial.println(_subscribeChannel);
-      client->disconnect();
+      client.disconnect();
       return E_MQTT_SUBSCRIBE;
     }
   } else {
@@ -71,7 +75,7 @@ mqtt_result PubSub::connect() {
 
 mqtt_result PubSub::publish(const char *message) {
   if(_publishChannel != NULL && _publishChannel != "") {
-    if(client->publish(_publishChannel, message)) {
+    if(client.publish(_publishChannel, message)) {
       return E_MQTT_OK;
     } else {
       return E_MQTT_PUBLISH;
@@ -83,9 +87,8 @@ mqtt_result PubSub::publish(const char *message) {
 
 int lastConnectionAttempt = 0;
 
-void PubSub::loop() {
-  Serial.println("Looping");
-  if(!client->connected()) {
+void PubSub::loop() { 
+  if(!client.connected()) {
     Serial.println("Not connected");
 
     long now = millis();
@@ -98,11 +101,11 @@ void PubSub::loop() {
       }
     }
   } else {
-    client->loop();
+    client.loop();
   }
 }
 
 PubSub::~PubSub() {
-  free(client);
+  //free(client);
 }
 
