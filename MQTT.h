@@ -4,6 +4,7 @@
 #include <PubSubClient.h>
 #include <ESP8266WiFi.h>
 #include <WiFiClient.h>
+#include <WiFiClientSecure.h>
 
 #define mqtt_result             uint8_t
 #define E_MQTT_OK               0
@@ -15,7 +16,7 @@
 
 class PubSub {
   public:
-    PubSub(const char *server, int port, const char *deviceName);
+    PubSub(const char *server, int port, bool tls, const char *deviceName);
 
     void setCallback(MQTT_CALLBACK_SIGNATURE);    
     void setSubscribeChannel(const char *channel);
@@ -33,6 +34,7 @@ class PubSub {
   private:
     const char   *_server;
     int           _port;
+    bool           _tls;
     const char   *_deviceName;
     const char   *_username;
     const char   *_password;
@@ -42,7 +44,7 @@ class PubSub {
     const char   *_publishChannel;
     int           _qosLevel;
     
-    //PubSubClient *client;
+    PubSubClient client;
     long          lastConnectionAttempt;
 };
 #endif

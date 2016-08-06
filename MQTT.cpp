@@ -1,30 +1,24 @@
 #include "MQTT.h"
 
 WiFiClient wifi;
-PubSubClient client(wifi);
+WiFiClientSecure secureWifi;
+PubSubClient client;
 
-PubSub::PubSub(const char *server, int port, const char *deviceName) {  
-  //WiFiClient *wifi = new WiFiClient();
-  //WiFiClientSecure *wifi = new WiFiClientSecure();
+PubSub::PubSub(const char *server, int port, bool tls, const char *deviceName) {  
+  if(tls) {
+    client.setClient(secureWifi);
+  } else {
+    client.setClient(wifi);
+  }
+  
   //wifi->setCertificate(client_cert, client_cert_len);
   //wifi->setPrivateKey(client_key, client_key_len);
   
   _server = server;
   _port = port;
   _deviceName = deviceName;
-  /*
-  _username = NULL;
-  _password = NULL;
-  _cert = NULL;
-  _certKey = NULL;
-  _publishChannel = NULL;
-  _subscribeChannel = NULL;
   _qosLevel = 0;
-  */
-  Serial.println(server);
-  Serial.println(port);
-  //client = new PubSubClient((Client &)wifi);
-  //client->setServer(server, port);
+  
   client.setServer(server, port);
 }
 

@@ -4,6 +4,7 @@
 #include <ESP8266WebServer.h>
 #include <DNSServer.h>
 
+
 #include "WiFiManager.h" 
 #include "Config.h"
 #include "MQTT.h"
@@ -330,8 +331,10 @@ void wifiSetup() {
 
 void pubSubSetup() {
   //pubSub = new PubSub(config.get("mqttServer")->getValue(), atoi(config.get("mqttPort")->getValue()), config.get("deviceName")->getValue());
-  pubSub = new PubSub("192.168.1.15", 1883, "garage");
+  pubSub = new PubSub("192.168.1.15", 8883, true, "garage");
+  
   pubSub->setCallback(pubSubCallback);
+  
   pubSub->setSubscribeChannel("home-assistant/garage/set");
   pubSub->setPublishChannel("home-assistant/garage");
   /*
@@ -347,10 +350,14 @@ void setup() {
   Serial.begin(115200);
   
   pinMode(RELAY_GND, OUTPUT);
+  digitalWrite(RELAY_GND, HIGH);
+
   pinMode(RELAY, OUTPUT);
-  pinMode(CLOSED_SWITCH, INPUT);
-  pinMode(OPENED_SWITCH, INPUT);
-  
+  digitalWrite(RELAY, HIGH);
+
+  //pinMode(CLOSED_SWITCH, INPUT);
+  //pinMode(OPENED_SWITCH, INPUT);
+
   digitalWrite(RELAY, LOW);
   digitalWrite(RELAY_GND, LOW);
   
@@ -366,5 +373,5 @@ void loop() {
   
   pubSub->loop();
   triggerLoop();
-  readDoorLoop();
+  //readDoorLoop();
 }
