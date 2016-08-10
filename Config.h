@@ -9,11 +9,10 @@
 #define E_CONFIG_PARSE_ERROR    4
 #define E_CONFIG_MAX            5
 
-#define CONFIG_MAX_OPTIONS      17
+#define CONFIG_MAX_OPTIONS      11
 
 #include <EEPROM.h>
 #include <FS.h>
-#include <ArduinoJson.h>
 
 class ConfigOption {
   public:

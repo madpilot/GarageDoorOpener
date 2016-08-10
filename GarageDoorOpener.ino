@@ -1,15 +1,8 @@
-#include <ESP8266WiFi.h>
-#include <WiFiClient.h>
-#include <ESP8266mDNS.h>
-#include <ESP8266WebServer.h>
-#include <DNSServer.h>
-
-
 #include "WiFiManager.h" 
 #include "Config.h"
 #include "MQTT.h"
 
-#define DEFAULT_SSID "garage"
+#define CONFIG_AP_SSID "garage"
 
 #define OPEN_STATE  1
 #define CLOSED_STATE 0
@@ -26,11 +19,6 @@
 
 #define PUBLISH_CHANNEL "home-assistant/garage"
 #define SUBSCRIBE_CHANNEL "home-assistant/garage/set"
-#define REQUEST_CHANNEL "home-assistant/garage/request"
-
-#define AUTH_MODE_NONE "0"
-#define AUTH_MODE_USERNAME "1"
-#define AUTH_MODE_CERTIFICATE "2"
 
 #define TLS_NO "0"
 #define TLS_YES "1"
@@ -70,20 +58,8 @@ void pubSubCallback(char* topic, byte* payload, unsigned int length) {
   }
 }
 
-// WIFI functions
-#define CONFIG_AP_SSID "garage"
-
 void setNetworkName(const char *name) {
   wifi_station_set_hostname((char *)name);
-  
-  if (!MDNS.begin(name)) {
-    Serial.println("Couldn't set mDNS name");
-    return;
-  }
-
-  Serial.print("Device is available at ");
-  Serial.print(name);
-  Serial.println(".local");
 }
 
 int getDoorState() {
@@ -181,23 +157,17 @@ void configSetup() {
   config.addKey("passkey", "", 32);
   config.addKey("encryption", "0", 1);
   
-  config.addKey("mqttDeviceName", DEFAULT_SSID, 64);
+  config.addKey("mqttDeviceName", "garage", 32);
   
-  config.addKey("mqttServer", "", 256);
-  config.addKey("mqttPort", "1883", 6);
+  config.addKey("mqttServer", "", 128);
+  config.addKey("mqttPort", "1883", 5);
 
-  config.addKey("mqttAuthMode", AUTH_MODE_NONE, 1);
+  config.addKey("mqttAuthMode", "0", 1);
   config.addKey("mqttTLS", TLS_NO, 1);
   
   config.addKey("mqttUsername", "", 32);
   config.addKey("mqttPassword", "", 32);
   
-  config.addKey("mqttSubscribeChannel", SUBSCRIBE_CHANNEL, 32);
-  config.addKey("mqttPublishChannel", PUBLISH_CHANNEL, 32);
-  config.addKey("mqttRequestChannel", REQUEST_CHANNEL, 32);
-  
-  config.addKey("mqttCert", "", 2048);
-  config.addKey("mqttCertKey", "", 2048);
   config.addKey("mqttFingerprint", "", 64);
   
   switch(config.read()) {
@@ -225,8 +195,7 @@ void saveCallback() {
 
 void wifiSetup() {
   WiFiManager wifiManager;
-
-  // Need an iterator
+  /*
   ConfigOption *ssid = config.get("ssid");
   WiFiManagerParameter ssid_parameter(ssid->getKey(), ssid->getValue(), ssid->getLength());
   wifiManager.addParameter(&ssid_parameter);
@@ -292,7 +261,8 @@ void wifiSetup() {
   wifiManager.addParameter(&mqttFingerprint_parameter);
   
   wifiManager.setSaveConfigCallback(saveCallback);
-;
+  */
+
   if(configMode) {
     Serial.println("Going in to config mode");
     wifiManager.startConfigPortal(CONFIG_AP_SSID);
@@ -300,6 +270,7 @@ void wifiSetup() {
     wifiManager.autoConnect(CONFIG_AP_SSID);
   }
 
+  /*
   ssid->setValue(ssid_parameter.getValue());
   passkey->setValue(passkey_parameter.getValue());
   encryption->setValue(encryption_parameter.getValue());
@@ -325,18 +296,29 @@ void wifiSetup() {
   if(saveFlag) {
     config.write();
   }
-    
-  setNetworkName(mqttDeviceName->getValue());
+  */
+
+  setNetworkName("garage");
+  //setNetworkName(mqttDeviceName->getValue());
 }
 
 void pubSubSetup() {
-  //pubSub = new PubSub(config.get("mqttServer")->getValue(), atoi(config.get("mqttPort")->getValue()), config.get("deviceName")->getValue());
-  pubSub = new PubSub("192.168.1.15", 8883, true, "garage");
+  pubSub = new PubSub(config.get("mqttServer")->getValue(), atoi(config.get("mqttPort")->getValue()), atoi(config.get("mqttTLS")->getValue()), config.get("mqttDeviceName")->getValue());
   
   pubSub->setCallback(pubSubCallback);
   
-  pubSub->setSubscribeChannel("home-assistant/garage/set");
-  pubSub->setPublishChannel("home-assistant/garage");
+  pubSub->setSubscribeChannel(SUBSCRIBE_CHANNEL);
+  pubSub->setPublishChannel(PUBLISH_CHANNEL);
+  
+  pubSub->setAuthMode(atoi(config.get("mqttAuthMode")->getValue()));
+  
+  pubSub->setAuthentication(config.get("mqttUsername")->getValue(), config.get("mqttPassword")->getValue());
+  pubSub->setFingerprint(config.get("mqttFingerprint")->getValue());
+  
+  pubSub->loadCertificate("/client.crt.der");
+  pubSub->loadPrivateKey("/client.key.der");
+  
+  
   /*
   pubSub->setSubscribeChannel(config.get("mqttSubscribeChannel")->getValue());
   pubSub->setPublishChannel(config.get("mqttPublishChannel")->getValue());
