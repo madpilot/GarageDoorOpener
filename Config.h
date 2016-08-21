@@ -9,7 +9,7 @@
 #define E_CONFIG_PARSE_ERROR    4
 #define E_CONFIG_MAX            5
 
-#define CONFIG_MAX_OPTIONS      11
+#define CONFIG_MAX_OPTIONS      15
 
 #include <EEPROM.h>
 #include <FS.h>

@@ -1,6 +1,10 @@
+#include <ESP8266WiFi.h>
+#include <WiFiUdp.h>
+
 #include "WiFiManager.h" 
 #include "Config.h"
 #include "MQTT.h"
+#include "Syslog.h"
 
 #define CONFIG_AP_SSID "garage"
 
@@ -35,6 +39,7 @@ int doorState = CLOSED;
 
 Config config;
 PubSub *pubSub = NULL;
+Syslog *syslog = NULL;
 
 void closeDoor();
 void openDoor();
@@ -169,6 +174,11 @@ void configSetup() {
   config.addKey("mqttPassword", "", 32);
   
   config.addKey("mqttFingerprint", "", 64);
+
+  config.addKey("syslog", "0", 1);
+  config.addKey("syslogHost", "", 128);
+  config.addKey("syslogPort", "514", 5);
+  config.addKey("syslogLevel", "6", 1);
   
   switch(config.read()) {
     case E_CONFIG_OK:
@@ -327,10 +337,20 @@ void pubSubSetup() {
   */
 }
 
+WiFiUDP syslogSocket;
+void syslogSetup() {
+  if(atoi(config.get("syslog")->getValue()) == 1) {
+    Serial.println("Syslog enabled");
+    // TODO Stringfy IP address and pass in
+    syslog = new Syslog(syslogSocket, config.get("syslogHost")->getValue(), atoi(config.get("syslogPort")->getValue()), "192.168.1.4", config.get("mqttDeviceName")->getValue());
+  } else {
+    syslog = new Syslog();
+  }
+}
 
 void setup() {
   Serial.begin(115200);
-  
+
   pinMode(RELAY_GND, OUTPUT);
   digitalWrite(RELAY_GND, HIGH);
 
@@ -345,6 +365,7 @@ void setup() {
   
   configSetup();
   wifiSetup();
+  syslogSetup();  
   pubSubSetup();
 }
 
