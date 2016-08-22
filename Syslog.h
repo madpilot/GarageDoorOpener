@@ -1,4 +1,6 @@
 #ifndef SYSLOG_h
+#define SYSLOG_h
+
 #define SYSLOG_EMERGENCY 0
 #define SYSLOG_ALERT 1
 #define SYSLOG_CRITICAL 2

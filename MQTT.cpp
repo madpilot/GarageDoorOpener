@@ -1,4 +1,5 @@
 #include "MQTT.h"
+#include "Syslogger.h";
 
 WiFiClient wifi;
 WiFiClientSecure secureWifi;
@@ -47,46 +48,46 @@ void PubSub::setFingerprint(const char *fingerprint) {
 }
 
 void PubSub::loadCertificate(const char *certPath) {
-  Serial.println("Loading certificate");
+  Syslogger->send(SYSLOG_INFO, "Loading certificate.");
   
   if(SPIFFS.begin()) {
     File cert = SPIFFS.open(certPath, "r");
     if(cert) {
       if(secureWifi.loadCertificate(cert)) {
-        Serial.println("Certificate loaded");
+        Syslogger->send(SYSLOG_INFO, "Certificate loaded.");
       } else {
-        Serial.println("Certificate not loaded");
+        Syslogger->send(SYSLOG_ERROR, "Certificate not loaded.");
       }
     } else {
-      Serial.println("Couldn't load certificate");
+      Syslogger->send(SYSLOG_ERROR, "Couldn't load certificate.");
     }
   } else {
-    Serial.println("SPIFFS not started");
+    Syslogger->send(SYSLOG_CRITICAL, "Unable to start SPIFFS.");
   }
 }
 
 void PubSub::loadPrivateKey(const char *keyPath) {
-  Serial.println("Loading private Key");
+  Syslogger->send(SYSLOG_INFO, "Loading private Key.");
   
   if(SPIFFS.begin()) {
     File key = SPIFFS.open(keyPath, "r");
     
     if(key) {
       if(secureWifi.loadPrivateKey(key)) {
-        Serial.println("Private Key loaded");
+        Syslogger->send(SYSLOG_INFO, "Private Key loaded.");
       } else {
-        Serial.println("Private Key not loaded");
+        Syslogger->send(SYSLOG_ERROR, "Private Key not loaded.");
       }
     } else {
-      Serial.println("Couldn't load private key");
+      Syslogger->send(SYSLOG_ERROR, "Couldn't load private key.");
     }
   } else {
-    Serial.println("SPIFFS not started");
+    Syslogger->send(SYSLOG_CRITICAL, "Unable to start SPIFFS.");
   }
 }
 
 mqtt_result PubSub::connect() {
-  Serial.print("Connecting to MQTT server...");
+  Syslogger->send(SYSLOG_INFO, "Connecting to MQTT server.");
 
   boolean connected = false;
 
@@ -97,9 +98,9 @@ mqtt_result PubSub::connect() {
     
   
     if(secureWifi.verify(_fingerprint, "myles-xps13.local")) {
-      Serial.println("\nConnection checks out");
+      Syslogger->send(SYSLOG_INFO, "MQTT server verified.");
     } else {
-      Serial.println("\nConnection doesn't check out");
+      Syslogger->send(SYSLOG_ALERT, "MQTT server failed fingerprint check!"); 
       return E_MQTT_VERIFICATION;
     }
     
@@ -117,19 +118,21 @@ mqtt_result PubSub::connect() {
   } 
   
   if(!connected) {
-    Serial.println("\nCouldn't connect to MQTT server. Will try again in 5 seconds.");
+    Syslogger->send(SYSLOG_ERROR, "Unable to connect to MQTT server. Will try again in 5 seconds.");
     return E_MQTT_CONNECT;
   }
 
   if(_subscribeChannel != NULL && _subscribeChannel != "") {
     if(!client.subscribe(_subscribeChannel, _qosLevel)) {
-      Serial.print("\nUnable to subscribe to ");
-      Serial.println(_subscribeChannel);
+      Syslogger->send(SYSLOG_ERROR, "Unable to subscribed to channel.");
+      //Serial.println(_subscribeChannel);
       client.disconnect();
       return E_MQTT_SUBSCRIBE;
+    } else {
+      Syslogger->send(SYSLOG_INFO, "Subscribed to channel.");
     }
   } else {
-    Serial.println("No subscribe channel set");
+    Syslogger->send(SYSLOG_ERROR, "No subscribe channel set.");
   }
 
   return E_MQTT_OK;
@@ -143,7 +146,7 @@ mqtt_result PubSub::publish(const char *message) {
       return E_MQTT_PUBLISH;
     }
   } else {
-    Serial.println("No publish channel set");
+    Syslogger->send(SYSLOG_ERROR, "No publish channel set.");
   }
 }
 
@@ -153,20 +156,16 @@ void PubSub::loop() {
     long now = millis();
 
     if(now - lastConnectionAttempt > 5000) {
-      Serial.println("Not connected");
+      Syslogger->send(SYSLOG_INFO, "Attempting connection to MQTT server.");
 
       lastConnectionAttempt = now;
       if(this->connect() == E_MQTT_OK) {
-        Serial.println("Connected");
+        Syslogger->send(SYSLOG_INFO, "Connected to MQTT server.");
         lastConnectionAttempt = 0;
       }
     }
   } else {
     client.loop();
   }
-}
-
-PubSub::~PubSub() {
-  //free(client);
 }
 

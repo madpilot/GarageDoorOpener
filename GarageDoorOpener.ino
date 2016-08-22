@@ -4,7 +4,9 @@
 #include "WiFiManager.h" 
 #include "Config.h"
 #include "MQTT.h"
-#include "Syslog.h"
+
+#include "Syslogger.h"
+Syslog *Syslogger;
 
 #define CONFIG_AP_SSID "garage"
 
@@ -39,7 +41,6 @@ int doorState = CLOSED;
 
 Config config;
 PubSub *pubSub = NULL;
-Syslog *syslog = NULL;
 
 void closeDoor();
 void openDoor();
@@ -49,16 +50,11 @@ void pubSubCallback(char* topic, byte* payload, unsigned int length) {
   strncpy(p, (char *)payload, length);
   p[length] = '\0';
 
-  Serial.print("Callback called: ");
-  Serial.print(topic);
-  Serial.print(" ");
-  Serial.println(p);
-
   if(strcmp(p, CLOSE_COMMAND) == 0) {
-    Serial.println("Closing the garage");
+    Syslogger->send(SYSLOG_INFO, "Closing the garage");
     closeDoor();
   } else if(strcmp(p, OPEN_COMMAND) == 0) {
-    Serial.println("Opening the garage");
+    Syslogger->send(SYSLOG_INFO, "Opening the garage");
     openDoor();
   }
 }
@@ -342,9 +338,10 @@ void syslogSetup() {
   if(atoi(config.get("syslog")->getValue()) == 1) {
     Serial.println("Syslog enabled");
     // TODO Stringfy IP address and pass in
-    syslog = new Syslog(syslogSocket, config.get("syslogHost")->getValue(), atoi(config.get("syslogPort")->getValue()), "192.168.1.4", config.get("mqttDeviceName")->getValue());
+    Syslogger = new Syslog(syslogSocket, config.get("syslogHost")->getValue(), atoi(config.get("syslogPort")->getValue()), "192.168.1.4", config.get("mqttDeviceName")->getValue());
+    Syslogger->send(SYSLOG_INFO, "Device booted.");
   } else {
-    syslog = new Syslog();
+    Syslogger = new Syslog();
   }
 }
 
