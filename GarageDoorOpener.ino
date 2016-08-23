@@ -57,6 +57,7 @@ void pubSubCallback(char* topic, byte* payload, unsigned int length) {
     Syslogger->send(SYSLOG_INFO, "Opening the garage");
     openDoor();
   }
+  free(p);
 }
 
 void setNetworkName(const char *name) {
@@ -337,8 +338,12 @@ WiFiUDP syslogSocket;
 void syslogSetup() {
   if(atoi(config.get("syslog")->getValue()) == 1) {
     Serial.println("Syslog enabled");
-    // TODO Stringfy IP address and pass in
-    Syslogger = new Syslog(syslogSocket, config.get("syslogHost")->getValue(), atoi(config.get("syslogPort")->getValue()), "192.168.1.4", config.get("mqttDeviceName")->getValue());
+    
+    char *ip = new char[16];
+    strncpy(ip, WiFi.localIP().toString().c_str(), 15);
+    
+    Syslogger = new Syslog(syslogSocket, config.get("syslogHost")->getValue(), atoi(config.get("syslogPort")->getValue()), ip, config.get("mqttDeviceName")->getValue());
+    Syslogger->setMinimumSeverity(atoi(config.get("syslogLevel")->getValue()));
     Syslogger->send(SYSLOG_INFO, "Device booted.");
   } else {
     Syslogger = new Syslog();

@@ -10,6 +10,7 @@ Syslog::Syslog(const char *host, const char *hostname, const char *name) {
   this->setPort(NULL);
   this->setHostname(hostname);
   this->setName(name);
+  this->setMinimumSeverity(0);
 }
 
 Syslog::Syslog(const char *host, int port, const char *hostname, const char *name) {
@@ -17,6 +18,7 @@ Syslog::Syslog(const char *host, int port, const char *hostname, const char *nam
   this->setPort(port);
   this->setHostname(hostname);
   this->setName(name);
+  this->setMinimumSeverity(0);
 }
 
 Syslog::Syslog(UDP &udp, const char *host, const char *hostname, const char *name) {
@@ -25,6 +27,7 @@ Syslog::Syslog(UDP &udp, const char *host, const char *hostname, const char *nam
   this->setPort(NULL);
   this->setHostname(hostname);
   this->setName(name);
+  this->setMinimumSeverity(0);
 }
 
 Syslog::Syslog(UDP &udp, const char *host, int port, const char *hostname, const char *name) {
@@ -33,6 +36,7 @@ Syslog::Syslog(UDP &udp, const char *host, int port, const char *hostname, const
   this->setHostname(hostname);
   this->setName(name);
   this->setUDP(udp);
+  this->setMinimumSeverity(0);
 }
 
 void Syslog::setHost(const char *host) {
@@ -55,6 +59,10 @@ void Syslog::setUDP(UDP &udp) {
   this->udp = &udp;
 }
 
+void Syslog::setMinimumSeverity(int minimum) {
+  this->minimumSeverity = minimum;
+}
+
 int Syslog::send(int severity, const char *message) {
   return send(severity, message, SYSLOG_KERNEL);
 }
@@ -62,6 +70,11 @@ int Syslog::send(int severity, const char *message) {
 int Syslog::send(int severity, const char *message, int facility) {
   if(this->host == NULL) {
     return E_SYSLOG_DISABLED;
+  }
+
+  // Filter out messages above the minimum severity level
+  if(severity > this->minimumSeverity) {
+    return E_SYSLOG_OK;
   }
   
   int pri = ((facility * 8) + severity);

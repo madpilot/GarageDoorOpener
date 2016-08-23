@@ -55,6 +55,8 @@ class Syslog {
     void setName(const char *name);
     void setHostname(const char *hostname);
     void setUDP(UDP &udp);
+
+    void setMinimumSeverity(int minimum);
     
     int send(int severity, const char *message);
     int send(int severity, const char *message, int facility);
@@ -65,6 +67,8 @@ class Syslog {
     const char *hostname;
     const char *name;
     UDP        *udp;
+
+    int         minimumSeverity;
 };
 
 #endif
