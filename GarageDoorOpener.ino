@@ -309,31 +309,6 @@ void wifiSetup() {
   //setNetworkName(mqttDeviceName->getValue());
 }
 
-void pubSubSetup() {
-  pubSub = new PubSub(config.get("mqttServer")->getValue(), atoi(config.get("mqttPort")->getValue()), atoi(config.get("mqttTLS")->getValue()), config.get("mqttDeviceName")->getValue());
-  
-  pubSub->setCallback(pubSubCallback);
-  
-  pubSub->setSubscribeChannel(SUBSCRIBE_CHANNEL);
-  pubSub->setPublishChannel(PUBLISH_CHANNEL);
-  
-  pubSub->setAuthMode(atoi(config.get("mqttAuthMode")->getValue()));
-  
-  pubSub->setAuthentication(config.get("mqttUsername")->getValue(), config.get("mqttPassword")->getValue());
-  pubSub->setFingerprint(config.get("mqttFingerprint")->getValue());
-  
-  pubSub->loadCertificate("/client.crt.der");
-  pubSub->loadPrivateKey("/client.key.der");
-  
-  
-  /*
-  pubSub->setSubscribeChannel(config.get("mqttSubscribeChannel")->getValue());
-  pubSub->setPublishChannel(config.get("mqttPublishChannel")->getValue());
-  pubSub->setAuthentication(config.get("mqttUsername")->getValue(), config.get("mqttPassword")->getValue());
-  pubSub->setCertificate(config.get("cert")->getValue(), config.get("certKey")->getValue());
-  */
-}
-
 WiFiUDP syslogSocket;
 void syslogSetup() {
   if(atoi(config.get("syslog")->getValue()) == 1) {
@@ -344,10 +319,72 @@ void syslogSetup() {
     
     Syslogger = new Syslog(syslogSocket, config.get("syslogHost")->getValue(), atoi(config.get("syslogPort")->getValue()), ip, config.get("mqttDeviceName")->getValue());
     Syslogger->setMinimumSeverity(atoi(config.get("syslogLevel")->getValue()));
-    Syslogger->send(SYSLOG_INFO, "Device booted.");
+    Syslogger->send(SYSLOG_INFO, "Device booted.")
   } else {
     Syslogger = new Syslog();
   }
+}
+
+void pubSubSetup() {
+  int authMode = atoi(config.get("mqttAuthMode")->getValue());
+  int tls = atoi(config.get("mqttTLS")->getValue());
+  
+  pubSub = new PubSub(config.get("mqttServer")->getValue(), atoi(config.get("mqttPort")->getValue()), tls, config.get("mqttDeviceName")->getValue());
+  pubSub->setCallback(pubSubCallback);
+  
+  pubSub->setSubscribeChannel(SUBSCRIBE_CHANNEL);
+  pubSub->setPublishChannel(PUBLISH_CHANNEL);
+
+  pubSub->setAuthMode(authMode);
+
+  if(authMode == AUTH_MODE_USERNAME) {
+    Syslogger->send(SYSLOG_INFO, "Using username and password for authentication.");
+    pubSub->setAuthentication(config.get("mqttUsername")->getValue(), config.get("mqttPassword")->getValue());
+  } else if(authMode == AUTH_MODE_CERTIFICATE) {
+    Syslogger->send(SYSLOG_INFO, "Using certificate for authentication.");
+    pubSub->setFingerprint(config.get("mqttFingerprint")->getValue());
+  }
+
+  if(tls || authMode == AUTH_MODE_CERTIFICATE) {
+    Syslogger->send(SYSLOG_INFO, "Loading certificate.");
+    switch(pubSub->loadCertificate("/client.crt.der")) {
+      case E_MQTT_OK:
+        Syslogger->send(SYSLOG_INFO, "Certificate loaded.");
+        break;
+      case E_MQTT_CERT_NOT_LOADED:
+        Syslogger->send(SYSLOG_ERROR, "Certificate not loaded.");
+        break;
+      case E_MQTT_CERT_FILE_NOT_FOUND:
+        Syslogger->send(SYSLOG_ERROR, "Couldn't find certificate file.");
+        break;
+      case E_MQTT_SPIFFS:
+        Syslogger->send(SYSLOG_CRITICAL, "Unable to start SPIFFS.");
+        break;
+    }
+    
+    Syslogger->send(SYSLOG_INFO, "Loading private key.");    
+    switch(pubSub->loadPrivateKey("/client.key.der")) {
+       case E_MQTT_OK:
+        Syslogger->send(SYSLOG_INFO, "Private key loaded.");
+        break;
+      case E_MQTT_PRIV_KEY_NOT_LOADED:
+        Syslogger->send(SYSLOG_ERROR, "Private key not loaded.");
+        break;
+      case E_MQTT_PRIV_KEY_FILE_NOT_FOUND:
+        Syslogger->send(SYSLOG_ERROR, "Couldn't find private key file.");
+        break;
+      case E_MQTT_SPIFFS:
+        Syslogger->send(SYSLOG_CRITICAL, "Unable to start SPIFFS.");
+        break;
+    }
+  }
+  
+  /*
+  pubSub->setSubscribeChannel(config.get("mqttSubscribeChannel")->getValue());
+  pubSub->setPublishChannel(config.get("mqttPublishChannel")->getValue());
+  pubSub->setAuthentication(config.get("mqttUsername")->getValue(), config.get("mqttPassword")->getValue());
+  pubSub->setCertificate(config.get("cert")->getValue(), config.get("certKey")->getValue());
+  */
 }
 
 void setup() {

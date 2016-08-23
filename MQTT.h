@@ -10,18 +10,26 @@
 #include <WiFiClient.h>
 #include <WiFiClientSecure.h>
 
-#define mqtt_result             uint8_t
-#define E_MQTT_OK               0
-#define E_MQTT_CONNECT          1
-#define E_MQTT_SUBSCRIBE        2
-#define E_MQTT_PUBLISH          3
-#define E_MQTT_VERIFICATION     4
+#define mqtt_result                       uint8_t
+#define E_MQTT_OK                         0
+#define E_MQTT_CONNECT                    1
+#define E_MQTT_SUBSCRIBE                  2
+#define E_MQTT_PUBLISH                    3
+#define E_MQTT_VERIFICATION               4
+#define E_MQTT_NO_SUBSCRIBE_CHANNEL       5
+#define E_MQTT_NO_PUBLISH_CHANNEL         6
+#define E_MQTT_SPIFFS                     7
 
-#define AUTH_MODE_NONE 0
-#define AUTH_MODE_USERNAME 1
-#define AUTH_MODE_CERTIFICATE 2
+#define E_MQTT_CERT_NOT_LOADED            8
+#define E_MQTT_CERT_FILE_NOT_FOUND        9
+#define E_MQTT_PRIV_KEY_NOT_LOADED        10
+#define E_MQTT_PRIV_KEY_FILE_NOT_FOUND    11
 
-#define QOS_LEVEL 0;
+#define AUTH_MODE_NONE                    0
+#define AUTH_MODE_USERNAME                1
+#define AUTH_MODE_CERTIFICATE             2
+
+#define QOS_LEVEL                         0;
 
 class PubSub {
   public:
@@ -33,8 +41,8 @@ class PubSub {
     void setAuthMode(int authMode);
     void setAuthentication(const char *username, const char *password);
     void setFingerprint(const char *fingerprint);
-    void loadCertificate(const char *certPath);
-    void loadPrivateKey(const char *keyPath);
+    mqtt_result loadCertificate(const char *certPath);
+    mqtt_result loadPrivateKey(const char *keyPath);
     
     mqtt_result connect();
     mqtt_result publish(const char *message);

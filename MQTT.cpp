@@ -47,47 +47,43 @@ void PubSub::setFingerprint(const char *fingerprint) {
   _fingerprint = fingerprint;
 }
 
-void PubSub::loadCertificate(const char *certPath) {
-  Syslogger->send(SYSLOG_INFO, "Loading certificate.");
-  
+mqtt_result PubSub::loadCertificate(const char *certPath) {
   if(SPIFFS.begin()) {
     File cert = SPIFFS.open(certPath, "r");
     if(cert) {
       if(secureWifi.loadCertificate(cert)) {
-        Syslogger->send(SYSLOG_INFO, "Certificate loaded.");
+        return E_MQTT_OK;
       } else {
-        Syslogger->send(SYSLOG_ERROR, "Certificate not loaded.");
+        return E_MQTT_CERT_NOT_LOADED;
       }
     } else {
-      Syslogger->send(SYSLOG_ERROR, "Couldn't load certificate.");
+      return E_MQTT_CERT_FILE_NOT_FOUND;
     }
   } else {
-    Syslogger->send(SYSLOG_CRITICAL, "Unable to start SPIFFS.");
+    return E_MQTT_SPIFFS;
   }
 }
 
-void PubSub::loadPrivateKey(const char *keyPath) {
-  Syslogger->send(SYSLOG_INFO, "Loading private Key.");
-  
+mqtt_result PubSub::loadPrivateKey(const char *keyPath) {  
   if(SPIFFS.begin()) {
     File key = SPIFFS.open(keyPath, "r");
     
     if(key) {
       if(secureWifi.loadPrivateKey(key)) {
-        Syslogger->send(SYSLOG_INFO, "Private Key loaded.");
+        return E_MQTT_OK;
       } else {
-        Syslogger->send(SYSLOG_ERROR, "Private Key not loaded.");
+        return E_MQTT_PRIV_KEY_NOT_LOADED;
       }
     } else {
-      Syslogger->send(SYSLOG_ERROR, "Couldn't load private key.");
+      return E_MQTT_PRIV_KEY_FILE_NOT_FOUND;
     }
   } else {
-    Syslogger->send(SYSLOG_CRITICAL, "Unable to start SPIFFS.");
+    return E_MQTT_SPIFFS;
   }
 }
 
 mqtt_result PubSub::connect() {
-  Syslogger->send(SYSLOG_INFO, "Connecting to MQTT server.");
+  //Syslogger->send(SYSLOG_INFO, "Connecting to MQTT server.");
 
   boolean connected = false;
 
@@ -98,9 +94,9 @@ mqtt_result PubSub::connect() {
     
   
     if(secureWifi.verify(_fingerprint, "myles-xps13.local")) {
-      Syslogger->send(SYSLOG_INFO, "MQTT server verified.");
+      //Syslogger->send(SYSLOG_INFO, "MQTT server verified.");
     } else {
-      Syslogger->send(SYSLOG_ALERT, "MQTT server failed fingerprint check!"); 
+      //Syslogger->send(SYSLOG_ALERT, "MQTT server failed fingerprint check!"); 
       return E_MQTT_VERIFICATION;
     }
     
@@ -118,21 +114,22 @@ mqtt_result PubSub::connect() {
   } 
   
   if(!connected) {
-    Syslogger->send(SYSLOG_ERROR, "Unable to connect to MQTT server. Will try again in 5 seconds.");
+    //Syslogger->send(SYSLOG_ERROR, "Unable to connect to MQTT server. Will try again in 5 seconds.");
     return E_MQTT_CONNECT;
   }
 
   if(_subscribeChannel != NULL && _subscribeChannel != "") {
     if(!client.subscribe(_subscribeChannel, _qosLevel)) {
-      Syslogger->send(SYSLOG_ERROR, "Unable to subscribed to channel.");
+      //Syslogger->send(SYSLOG_ERROR, "Unable to subscribed to channel.");
       //Serial.println(_subscribeChannel);
       client.disconnect();
       return E_MQTT_SUBSCRIBE;
     } else {
-      Syslogger->send(SYSLOG_INFO, "Subscribed to channel.");
+      //Syslogger->send(SYSLOG_INFO, "Subscribed to channel.");
     }
   } else {
-    Syslogger->send(SYSLOG_ERROR, "No subscribe channel set.");
+    //Syslogger->send(SYSLOG_ERROR, "No subscribe channel set.");
+    return E_MQTT_NO_SUBSCRIBE_CHANNEL;
   }
 
   return E_MQTT_OK;
@@ -146,7 +143,8 @@ mqtt_result PubSub::publish(const char *message) {
       return E_MQTT_PUBLISH;
     }
   } else {
-    Syslogger->send(SYSLOG_ERROR, "No publish channel set.");
+    return E_MQTT_NO_PUBLISH_CHANNEL;
+    //Syslogger->send(SYSLOG_ERROR, "No publish channel set.");
   }
 }
 
