@@ -160,6 +160,8 @@ void PubSub::loop() {
       if(this->connect() == E_MQTT_OK) {
         Syslogger->send(SYSLOG_INFO, "Connected to MQTT server.");
         lastConnectionAttempt = 0;
+      } else {
+        Syslogger->send(SYSLOG_ERROR, "Connection failed.");
       }
     }
   } else {
