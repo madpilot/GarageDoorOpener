@@ -137,28 +137,7 @@ namespace mDNSResolver {
       memcpy(a->data, buffer + (*offset), a->len);
       (*offset) += a->len;
     }
-
-    Serial.print("Name: ");
-    Serial.println(a->name);
     
-    Serial.print("Data: ");
-    for(int i = 0; i < a->len; i++) {
-      if(a->type == 0x01) {
-        Serial.print(a->data[i]);
-        if(i != a->len - 1) {
-          Serial.print(".");
-        }
-      } else if(a->type == 0x1c) {
-        Serial.print(a->data[i]);
-        if(i != a->len - 1) {
-          Serial.print(":");
-        }
-      } else if(a->type == 0x05) {
-        Serial.print(a->data[i]);
-      }
-    }
-    Serial.println("\n");
-
     return 0;
   }
   
@@ -184,18 +163,53 @@ namespace mDNSResolver {
     // For this library, we are only interested in packets that contain answers
     if(answerCount > 0) {
       unsigned int offset = 0;
+      
       if(skipQuestions(buffer, len, &offset) != 0) {
         Serial.println("Error parsing questions\n");
         return;
       }
 
-      Answer answers[answerCount];
-      
       Serial.println("\n");
+      
       for(int i = 0; i < answerCount; i++) {
-        if(parseAnswer(buffer, len, &offset, &answers[i]) != 0) {
-          Serial.println("Error parsing answers\n");
+        Answer answer;
+        answer.name = NULL;
+        answer.data = NULL;
+        
+        if(parseAnswer(buffer, len, &offset, &answer) == 0) {
+          Serial.print("Name: ");
+          Serial.println(answer.name);
+
+          Serial.print("Type: ");
+          Serial.println(answer.type);
+      
+          if(answer.type == 0x01 || answer.type == 0x05) {    
+            Serial.print("Data: ");
+            for(int i = 0; i < answer.len; i++) {
+              if(answer.type == 0x01) {
+                Serial.print(answer.data[i]);
+                if(i != answer.len - 1) {
+                  Serial.print(".");
+                }
+              } else if(answer.type == 0x05) {
+                Serial.print(answer.data[i]);
+              }
+            }
+            Serial.println("\n");
+          }
+          
+          free(answer.data);
+          free(answer.name);
           return;
+        } else {
+          Serial.println("Error parsing packet");
+          
+          if(answer.data) {
+            free(answer.data);
+          }
+          if(answer.name) {
+            free(answer.name);
+          }
         }
       }
     }
