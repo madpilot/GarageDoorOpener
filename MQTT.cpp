@@ -1,9 +1,11 @@
 #include "MQTT.h"
 #include "Syslogger.h";
+#include "mDNSResolver.h";
 
 WiFiClient wifi;
 WiFiClientSecure secureWifi;
 PubSubClient client;
+mDNSResolver::Resolver resolver;
 
 PubSub::PubSub(const char *server, int port, bool tls, const char *deviceName) {  
   if(tls) {
@@ -87,12 +89,14 @@ mqtt_result PubSub::connect() {
 
   boolean connected = false;
 
+  Syslogger->send(SYSLOG_INFO, "Resolving");
+  //resolver.query("myles-xps13.local");
+
   if(_authMode == AUTH_MODE_CERTIFICATE) {
     if(!secureWifi.connect(_server, _port)) {
       return E_MQTT_CONNECT;
     }
     
-  
     if(secureWifi.verify(_fingerprint, "myles-xps13.local")) {
       //Syslogger->send(SYSLOG_INFO, "MQTT server verified.");
     } else {
@@ -150,6 +154,8 @@ mqtt_result PubSub::publish(const char *message) {
 
 long lastConnectionAttempt = 0;
 void PubSub::loop() {
+  resolver.loop();
+    
   if(!client.connected()) {
     long now = millis();
 

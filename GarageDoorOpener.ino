@@ -319,7 +319,7 @@ void syslogSetup() {
     
     Syslogger = new Syslog(syslogSocket, config.get("syslogHost")->getValue(), atoi(config.get("syslogPort")->getValue()), ip, config.get("mqttDeviceName")->getValue());
     Syslogger->setMinimumSeverity(atoi(config.get("syslogLevel")->getValue()));
-    Syslogger->send(SYSLOG_INFO, "Device booted.")
+    Syslogger->send(SYSLOG_INFO, "Device booted.");
   } else {
     Syslogger = new Syslog();
   }
@@ -390,21 +390,23 @@ void pubSubSetup() {
 void setup() {
   Serial.begin(115200);
 
+  /*
   pinMode(RELAY_GND, OUTPUT);
   digitalWrite(RELAY_GND, HIGH);
 
   pinMode(RELAY, OUTPUT);
   digitalWrite(RELAY, HIGH);
-
-  //pinMode(CLOSED_SWITCH, INPUT);
-  //pinMode(OPENED_SWITCH, INPUT);
-
-  digitalWrite(RELAY, LOW);
-  digitalWrite(RELAY_GND, LOW);
+  
+  pinMode(CLOSED_SWITCH, INPUT);
+  pinMode(OPENED_SWITCH, INPUT);
+  */
+  
+  //digitalWrite(RELAY, LOW);
+  //digitalWrite(RELAY_GND, LOW);
   
   configSetup();
   wifiSetup();
-  syslogSetup();  
+  syslogSetup();
   pubSubSetup();
 }
 
@@ -414,6 +416,6 @@ void loop() {
   }
   
   pubSub->loop();
-  triggerLoop();
+  //triggerLoop();
   //readDoorLoop();
 }
