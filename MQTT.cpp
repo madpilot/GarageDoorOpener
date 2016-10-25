@@ -143,7 +143,23 @@ mqtt_result PubSub::publish(const char *message) {
 
 long lastConnectionAttempt = 0;
 void PubSub::loop() {
-  resolver.loop();
+  mdns_result resolverResult = resolver.loop();
+  if(resolverResult != E_MDNS_OK) {
+    switch(resolverResult) {
+      case E_MDNS_TOO_BIG:
+        Syslogger->send(SYSLOG_INFO, "mDNS packet too big.");
+        break;
+      case E_MDNS_POINTER_OVERFLOW:
+        Syslogger->send(SYSLOG_ERROR, "mDNS packet had an overflowing pointer.");
+        break;
+      case E_MDNS_PACKET_ERROR:
+        Syslogger->send(SYSLOG_INFO, "mDNS packet invalid.");
+        break;
+      case E_MDNS_PARSING_ERROR:
+        Syslogger->send(SYSLOG_INFO, "Unable to parse mDNS packet.");
+        break;
+    }
+  }
     
   if(!client.connected()) {
     long now = millis();

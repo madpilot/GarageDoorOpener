@@ -11,20 +11,20 @@
 #include <WiFiClientSecure.h>
 
 #define mqtt_result                       uint8_t
-#define E_MQTT_OK                         0
-#define E_MQTT_WAITING                    1
-#define E_MQTT_CONNECT                    2
-#define E_MQTT_SUBSCRIBE                  3
-#define E_MQTT_PUBLISH                    4
-#define E_MQTT_VERIFICATION               5
-#define E_MQTT_NO_SUBSCRIBE_CHANNEL       6
-#define E_MQTT_NO_PUBLISH_CHANNEL         7
-#define E_MQTT_SPIFFS                     8
+#define E_MQTT_OK                         0x00
+#define E_MQTT_WAITING                    0x01
+#define E_MQTT_CONNECT                    0x02
+#define E_MQTT_SUBSCRIBE                  0x03
+#define E_MQTT_PUBLISH                    0x04
+#define E_MQTT_VERIFICATION               0x05
+#define E_MQTT_NO_SUBSCRIBE_CHANNEL       0x06
+#define E_MQTT_NO_PUBLISH_CHANNEL         0x07
+#define E_MQTT_SPIFFS                     0x08
 
-#define E_MQTT_CERT_NOT_LOADED            9
-#define E_MQTT_CERT_FILE_NOT_FOUND        10
-#define E_MQTT_PRIV_KEY_NOT_LOADED        11
-#define E_MQTT_PRIV_KEY_FILE_NOT_FOUND    12
+#define E_MQTT_CERT_NOT_LOADED            0x09
+#define E_MQTT_CERT_FILE_NOT_FOUND        0x0A
+#define E_MQTT_PRIV_KEY_NOT_LOADED        0x0B
+#define E_MQTT_PRIV_KEY_FILE_NOT_FOUND    0x0C
 
 #define AUTH_MODE_NONE                    0
 #define AUTH_MODE_USERNAME                1

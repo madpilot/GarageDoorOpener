@@ -35,10 +35,10 @@
 #define SYSLOG_LOCAL_6 22
 #define SYSLOG_LOCAL_7 23
 
-#define E_SYSLOG_OK 0
-#define E_SYSLOG_CONNECT 1
-#define E_SYSLOG_SEND 2
-#define E_SYSLOG_DISABLED 3
+#define E_SYSLOG_OK       0x10
+#define E_SYSLOG_CONNECT  0x11
+#define E_SYSLOG_SEND     0x12
+#define E_SYSLOG_DISABLED 0x13
 
 #include <Udp.h>
 

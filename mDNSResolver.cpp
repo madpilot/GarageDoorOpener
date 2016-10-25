@@ -15,13 +15,18 @@ namespace mDNSResolver {
     
   }
 
-  void Resolver::loop() {
-    listen();
+  void Resolver::init() {
+    _init = true;
+    Udp.beginMulticast(WiFi.localIP(), IPAddress(224, 0, 0, 251), MDNS_TARGET_PORT);
+  }
+
+  mdns_result Resolver::loop() {
     expire();
+    return listen();
   }
 
   // Work out how many bytes are dedicated to questions. Since we aren't answering questions, they can be skipped
-  int Resolver::skipQuestions(byte *buffer, unsigned int len, unsigned int *offset) {
+  mdns_result Resolver::skipQuestions(byte *buffer, unsigned int len, unsigned int *offset) {
     unsigned int questionCount = (buffer[4] << 8) + buffer[5];
     
     (*offset) = 12;
@@ -30,26 +35,26 @@ namespace mDNSResolver {
 
       while(buffer[*offset] != '\0') {
         // If it's a pointer, add two to the counter
-        if(buffer[*offset] == 0xc0) {
+        if((buffer[*offset] & 0xc0) == 0xc0) {
           questionSize += 2;
           break;
         } else {
           questionSize += (unsigned int)buffer[*offset] + 1; 
         }
 
-        if(questionSize > 255) {
-          return -1;
+        if(questionSize > MDNS_MAX_NAME_LEN) {
+          return E_MDNS_PACKET_ERROR;
         }
       }
       
       (*offset) += questionSize + 4; // 2 bytes for the qtypes and 2 bytes qclass
     }
     
-    return 0;
+    return E_MDNS_OK;
   }
 
   // Len should not include the NULL byte string terminator
-  int Resolver::parseName(char **name, const char *mapped, unsigned int len) {
+  mdns_result Resolver::parseName(char **name, const char *mapped, unsigned int len) {
     // This is not an off-by-one error - the unparsed name is one character longer than the parsed one.
     // So we don't need to add a byte for the NULL terminator.
     *name = (char *)malloc(sizeof(char) * (len - 1));
@@ -70,17 +75,21 @@ namespace mDNSResolver {
     }
     
     (*name)[len - 1] = '\0';
-    return 0;
+    return E_MDNS_OK;
   }
 
-  int Resolver::assembleName(byte *buffer, unsigned int len, unsigned int *offset, char **name, unsigned int maxlen) {
+  mdns_result Resolver::assembleName(byte *buffer, unsigned int len, unsigned int *offset, char **name, unsigned int maxlen) {
     char *scratch = (char *)malloc(sizeof(char) * (MDNS_MAX_NAME_LEN + 1));
     unsigned int index = 0;
 
     while(buffer[*offset] != '\0' && index < maxlen) {
-      if(buffer[(*offset)] == 0xc0) {
+      if((buffer[(*offset)] & 0xc0) == 0xc0) {
         char *pointer;
         unsigned int pointerOffset = ((buffer[(*offset)++] & 0x3f) << 8) + buffer[*offset];
+        if(pointerOffset > len) {
+          // Points to somewhere beyond the packet
+          return E_MDNS_POINTER_OVERFLOW;
+        }
         assembleName(buffer, len, &pointerOffset, &pointer);
         
         unsigned int pointerLen = strlen(pointer);
@@ -101,16 +110,20 @@ namespace mDNSResolver {
     *name = (char *)malloc(sizeof(char) * index);
     memcpy(*name, scratch, index);
     free(scratch);
-    return 0;
+    return E_MDNS_OK;
   }
 
-  int Resolver::assembleName(byte *buffer, unsigned int len, unsigned int *offset, char **name) {
-    assembleName(buffer, len, offset, name, MDNS_MAX_NAME_LEN);
+  mdns_result Resolver::assembleName(byte *buffer, unsigned int len, unsigned int *offset, char **name) {
+    return assembleName(buffer, len, offset, name, MDNS_MAX_NAME_LEN);
   }
 
-  int Resolver::parseAnswer(byte *buffer, unsigned int len, unsigned int *offset, Answer *a) {
+  mdns_result Resolver::parseAnswer(byte *buffer, unsigned int len, unsigned int *offset, Answer *a) {
     char *assembled;
-    assembleName(buffer, len, offset, &assembled);
+    int assembleResult = assembleName(buffer, len, offset, &assembled);
+    if(assembleResult != E_MDNS_OK) {
+      return assembleResult;
+    }
+    
     parseName(&a->name, assembled, strlen(assembled));
     free(assembled);
 
@@ -136,20 +149,19 @@ namespace mDNSResolver {
       (*offset) += a->len;
     }
     
-    return 0;
+    return E_MDNS_OK;
   }
   
-  void Resolver::parsePacket(byte *buffer, unsigned int len) {
+  mdns_result Resolver::parsePacket(byte *buffer, unsigned int len) {
     if((buffer[2] & 0b10000000) != 0b10000000) {
       // Not an answer packet
-      return;
+      return E_MDNS_OK;
     }
     
     bool truncated = buffer[2] & 0b00000010;
     
     if (buffer[3] & 0b00001111) {
-      // Non-zero response code - Error
-      return;
+      return E_MDNS_PACKET_ERROR;
     }
 
     unsigned int answerCount = (buffer[6] << 8) + buffer[7];
@@ -158,9 +170,9 @@ namespace mDNSResolver {
     if(answerCount > 0) {
       unsigned int offset = 0;
       
-      if(skipQuestions(buffer, len, &offset) != 0) {
-        // Error parsing questions
-        return;
+      mdns_result questionResult = skipQuestions(buffer, len, &offset);
+      if(questionResult != E_MDNS_OK) {
+        return questionResult;
       }
 
       for(int i = 0; i < answerCount; i++) {
@@ -168,7 +180,7 @@ namespace mDNSResolver {
         answer.name = NULL;
         answer.data = NULL;
 
-        if(parseAnswer(buffer, len, &offset, &answer) == 0) {
+        if(parseAnswer(buffer, len, &offset, &answer) == E_MDNS_OK) {
           int resultIndex = search(answer.name);
           if(resultIndex != -1) {        
             if(answer.type == 0x01) {
@@ -192,15 +204,15 @@ namespace mDNSResolver {
           
           free(answer.data);
           free(answer.name);
-        } else {
-          // Error parsing packets
-          
+          return E_MDNS_OK;
+        } else {          
           if(answer.data) {
             free(answer.data);
           }
           if(answer.name) {
             free(answer.name);
           }
+          return E_MDNS_PARSING_ERROR;
         }
       }
     }
@@ -222,6 +234,10 @@ namespace mDNSResolver {
     return empty;
   }
 
+  void Resolver::freeResponse(Response r) {
+    free(r.name);
+  }
+
   Query Resolver::buildQuery(const char *name) {
     int len = strlen(name);
 
@@ -240,8 +256,7 @@ namespace mDNSResolver {
 
   void Resolver::broadcastQuery(Query q) {
     if (!_init) {
-      _init = true;
-      Udp.beginMulticast(WiFi.localIP(), IPAddress(224, 0, 0, 251), MDNS_TARGET_PORT);
+      init();
     }
     
     int namelen = strlen(q.name);
@@ -297,13 +312,19 @@ namespace mDNSResolver {
     Udp.endPacket();
   }
 
+  void Resolver::freeQuery(Query q) {
+    free(q.name);
+  }
+
   Response Resolver::query(const char *name) {
     int cachedIndex = search(name);
     if(cachedIndex == -1) {
       Response response = buildResponse(name);
-      Query q = buildQuery(name);
       insert(response);
+      
+      Query q = buildQuery(name);
       broadcastQuery(q);
+      freeQuery(q);
       return response;
     } else {
       return _cache[cachedIndex];
@@ -338,12 +359,20 @@ namespace mDNSResolver {
     if(_cacheCount < MDNS_RESOLVER_MAX_CACHE) {
       _cache[_cacheCount++] = response;
     } else {
-      // Cache is full - need to remove something.
+      // Cache is full - Remove the thing with the lowest TTL
+      unsigned long lowest = _cache[0].ttl;
+      int index = 0;
+      for(int i = 1; i < _cacheCount; i++) {
+        if(_cache[i].ttl < lowest) {
+          index = i;
+        }
+      }
+      remove(index);
     }
   }
 
   void Resolver::remove(int index) {
-    free(_cache[index].name);
+    freeResponse(_cache[index]);
     _cache[index] = _cache[_cacheCount - 1];
     _cacheCount--;
   }
@@ -357,23 +386,24 @@ namespace mDNSResolver {
     return -1;
   }
 
-  void Resolver::listen() {
+  mdns_result Resolver::listen() {
     if (!_init) {
-      _init = true;
-      Udp.beginMulticast(WiFi.localIP(), IPAddress(224, 0, 0, 251), MDNS_TARGET_PORT);
+      init();
     }
     unsigned int len = Udp.parsePacket();
     if(len >= MDNS_MAX_PACKET) {
       // Bail out. This is a big packet. A straight up answer response probably won't be this big
-      Syslogger->send(SYSLOG_INFO, "mDNS Packet too large.");
-      return;
+      return E_MDNS_TOO_BIG;
     }
 
+    mdns_result parseResult;
     if(len > 0) {
       byte *buffer = (byte *)malloc(sizeof(byte) * len);
       Udp.read(buffer, len);
-      parsePacket(buffer, len);
+      parseResult = parsePacket(buffer, len);
       free(buffer);
     }
+
+    return parseResult;
   }
 };
