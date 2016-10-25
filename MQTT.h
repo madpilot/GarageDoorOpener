@@ -12,18 +12,19 @@
 
 #define mqtt_result                       uint8_t
 #define E_MQTT_OK                         0
-#define E_MQTT_CONNECT                    1
-#define E_MQTT_SUBSCRIBE                  2
-#define E_MQTT_PUBLISH                    3
-#define E_MQTT_VERIFICATION               4
-#define E_MQTT_NO_SUBSCRIBE_CHANNEL       5
-#define E_MQTT_NO_PUBLISH_CHANNEL         6
-#define E_MQTT_SPIFFS                     7
+#define E_MQTT_WAITING                    1
+#define E_MQTT_CONNECT                    2
+#define E_MQTT_SUBSCRIBE                  3
+#define E_MQTT_PUBLISH                    4
+#define E_MQTT_VERIFICATION               5
+#define E_MQTT_NO_SUBSCRIBE_CHANNEL       6
+#define E_MQTT_NO_PUBLISH_CHANNEL         7
+#define E_MQTT_SPIFFS                     8
 
-#define E_MQTT_CERT_NOT_LOADED            8
-#define E_MQTT_CERT_FILE_NOT_FOUND        9
-#define E_MQTT_PRIV_KEY_NOT_LOADED        10
-#define E_MQTT_PRIV_KEY_FILE_NOT_FOUND    11
+#define E_MQTT_CERT_NOT_LOADED            9
+#define E_MQTT_CERT_FILE_NOT_FOUND        10
+#define E_MQTT_PRIV_KEY_NOT_LOADED        11
+#define E_MQTT_PRIV_KEY_FILE_NOT_FOUND    12
 
 #define AUTH_MODE_NONE                    0
 #define AUTH_MODE_USERNAME                1
@@ -63,8 +64,6 @@ class PubSub {
     const char   *_subscribeChannel;
     const char   *_publishChannel;
     int           _qosLevel;
-    
-    //PubSubClient  client;
     long          lastConnectionAttempt;
 };
 #endif

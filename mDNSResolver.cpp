@@ -1,5 +1,7 @@
 #include "mDNSResolver.h"
 
+#include "Syslogger.h"
+
 namespace mDNSResolver {  
   WiFiUDP Udp;
 
@@ -15,18 +17,14 @@ namespace mDNSResolver {
 
   void Resolver::loop() {
     listen();
-    //expire();
+    expire();
   }
 
   // Work out how many bytes are dedicated to questions. Since we aren't answering questions, they can be skipped
   int Resolver::skipQuestions(byte *buffer, unsigned int len, unsigned int *offset) {
     unsigned int questionCount = (buffer[4] << 8) + buffer[5];
-    Serial.print("Question Count: ");
-    Serial.println(questionCount);
     
     (*offset) = 12;
-    // Name payload looks like this:
-    // 4xxxx5xxxxx0qtqc
     for(int i = 0; i < questionCount; i++) {
       unsigned int questionSize = 0;
 
@@ -150,59 +148,52 @@ namespace mDNSResolver {
     bool truncated = buffer[2] & 0b00000010;
     
     if (buffer[3] & 0b00001111) {
-      Serial.println("None-zero response code");
       // Non-zero response code - Error
       return;
     }
 
     unsigned int answerCount = (buffer[6] << 8) + buffer[7];
-    Serial.print("Answer Count: ");
-    Serial.println(answerCount);
-
     
     // For this library, we are only interested in packets that contain answers
     if(answerCount > 0) {
       unsigned int offset = 0;
       
       if(skipQuestions(buffer, len, &offset) != 0) {
-        Serial.println("Error parsing questions\n");
+        // Error parsing questions
         return;
       }
 
-      Serial.println("\n");
-      
       for(int i = 0; i < answerCount; i++) {
         Answer answer;
         answer.name = NULL;
         answer.data = NULL;
-        
-        if(parseAnswer(buffer, len, &offset, &answer) == 0) {
-          Serial.print("Name: ");
-          Serial.println(answer.name);
 
-          Serial.print("Type: ");
-          Serial.println(answer.type);
-      
-          if(answer.type == 0x01 || answer.type == 0x05) {    
-            Serial.print("Data: ");
-            for(int i = 0; i < answer.len; i++) {
-              if(answer.type == 0x01) {
-                Serial.print(answer.data[i]);
-                if(i != answer.len - 1) {
-                  Serial.print(".");
-                }
-              } else if(answer.type == 0x05) {
-                Serial.print(answer.data[i]);
+        if(parseAnswer(buffer, len, &offset, &answer) == 0) {
+          int resultIndex = search(answer.name);
+          if(resultIndex != -1) {        
+            if(answer.type == 0x01) {
+              _cache[resultIndex].ipAddress = IPAddress((int)answer.data[0], (int)answer.data[1], (int)answer.data[2], (int)answer.data[3]);
+              _cache[resultIndex].ttl = answer.ttl;
+              _cache[resultIndex].waiting = false;
+            } else if(answer.type == 0x05) {
+              // If data is already in there, copy the data
+              int cnameIndex = search((char *)answer.data);
+              
+              if(cnameIndex != -1) {
+                _cache[resultIndex].ipAddress = _cache[cnameIndex].ipAddress; 
+                _cache[resultIndex].waiting = false;
+                _cache[resultIndex].ttl = answer.ttl;
+              } else {
+                Response r = buildResponse((char *)answer.data);
+                insert(r);
               }
             }
-            Serial.println("\n");
           }
           
           free(answer.data);
           free(answer.name);
-          return;
         } else {
-          Serial.println("Error parsing packet");
+          // Error parsing packets
           
           if(answer.data) {
             free(answer.data);
@@ -250,16 +241,16 @@ namespace mDNSResolver {
   void Resolver::broadcastQuery(Query q) {
     if (!_init) {
       _init = true;
-      Serial.println("Initializing Multicast.");
       Udp.beginMulticast(WiFi.localIP(), IPAddress(224, 0, 0, 251), MDNS_TARGET_PORT);
     }
     
-    int namelen = strlen(q.name);    
-    int packetSize = namelen + 18;
+    int namelen = strlen(q.name);
+        
+    const int packetSize = namelen + 18;
     byte buffer[packetSize];
 
     for(int i = 0; i < packetSize; i++) {
-      buffer[i] = 0;
+      buffer[i] = '\0';
     }
 
     buffer[4] = 0;
@@ -272,10 +263,14 @@ namespace mDNSResolver {
       if(q.name[wordend] == '.' || q.name[wordend] == '\0') {
         const int wordlen = wordend - wordstart;
         buffer[bufferlen++] = (byte)wordlen;
+
         for(int i = wordstart; i < wordend; i++) {
           buffer[bufferlen++] = q.name[i];
         }
-        wordend++;
+        
+        if(q.name[wordend] == '.') {
+          wordend++;
+        }
         wordstart = wordend;
       }
       
@@ -336,28 +331,6 @@ namespace mDNSResolver {
           }
         }
       }
-
-      if(_cacheCount == 0) {
-        Serial.println("Cache empty\n");
-      }
-
-      for(int i = 0; i < _cacheCount; i++) {
-        Serial.print("Slot: ");
-        Serial.println(i);
-
-        Serial.print("Name: ");
-        Serial.println(_cache[i].name);
-        
-        if(_cache[i].waiting) {
-          Serial.println("Waiting: true");
-          Serial.println("Timeout: ");
-          Serial.println(_cache[i].timeout);
-        } else {
-          Serial.println("Waiting: false");
-          Serial.println("TTL: ");
-          Serial.println(_cache[i].ttl);
-        }
-      }
     }
   }
 
@@ -365,7 +338,7 @@ namespace mDNSResolver {
     if(_cacheCount < MDNS_RESOLVER_MAX_CACHE) {
       _cache[_cacheCount++] = response;
     } else {
-      printf("Cache full\n");
+      // Cache is full - need to remove something.
     }
   }
 
@@ -381,15 +354,20 @@ namespace mDNSResolver {
         return i;
       }
     }
+    return -1;
   }
 
   void Resolver::listen() {
     if (!_init) {
       _init = true;
-      Serial.println("Initializing Multicast.");
       Udp.beginMulticast(WiFi.localIP(), IPAddress(224, 0, 0, 251), MDNS_TARGET_PORT);
     }
     unsigned int len = Udp.parsePacket();
+    if(len >= MDNS_MAX_PACKET) {
+      // Bail out. This is a big packet. A straight up answer response probably won't be this big
+      Syslogger->send(SYSLOG_INFO, "mDNS Packet too large.");
+      return;
+    }
 
     if(len > 0) {
       byte *buffer = (byte *)malloc(sizeof(byte) * len);

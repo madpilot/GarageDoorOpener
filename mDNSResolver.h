@@ -2,15 +2,17 @@
 #define MDNS_RESOLVER_h
 
 #include <ESP8266WiFi.h>
-#include "mdns.h"
+#include <WiFiUdp.h>
 
 #define INT_MAX 2147483647
 #define MDNS_TARGET_PORT 5353
 #define MDNS_SOURCE_PORT 5353
 #define MDNS_TTL 255
-#define MDNS_RESOLVER_MAX_CACHE 2
+#define MDNS_RESOLVER_MAX_CACHE 4
 #define MDNS_TIMEOUT 5
 #define MDNS_MAX_NAME_LEN 255
+// Max allowable packet - resolving names should result in small packets.
+#define MDNS_MAX_PACKET 256
 
 #define byte unsigned char
 

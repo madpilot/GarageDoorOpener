@@ -2,7 +2,7 @@
 #include <WiFiUdp.h>
 
 #include "WiFiManager.h" 
-#include "Config.h"
+//#include "Config.h"
 #include "MQTT.h"
 
 #include "Syslogger.h"
@@ -23,8 +23,8 @@ Syslog *Syslogger;
 #define OPENING_PAYLOAD "OPENING"
 #define CLOSING_PAYLOAD "CLOSING"
 
-#define PUBLISH_CHANNEL "home-assistant/garage"
-#define SUBSCRIBE_CHANNEL "home-assistant/garage/set"
+#define PUBLISH_CHANNEL "home-assistant/cover"
+#define SUBSCRIBE_CHANNEL "home-assistant/cover/set"
 
 #define TLS_NO "0"
 #define TLS_YES "1"
@@ -39,7 +39,7 @@ int saveFlag = false;
 bool configMode = false;
 int doorState = CLOSED;
 
-Config config;
+//Config config;
 PubSub *pubSub = NULL;
 
 void closeDoor();
@@ -154,6 +154,7 @@ void closeDoor() {
   }
 }
 
+/*
 void configSetup() {
   config.addKey("ssid", "", 32);
   config.addKey("passkey", "", 32);
@@ -195,6 +196,7 @@ void configSetup() {
       return;
   }
 }
+*/
 
 void saveCallback() {
   saveFlag = true;
@@ -276,7 +278,7 @@ void wifiSetup() {
   } else {  
     wifiManager.autoConnect(CONFIG_AP_SSID);
   }
-
+  
   /*
   ssid->setValue(ssid_parameter.getValue());
   passkey->setValue(passkey_parameter.getValue());
@@ -311,6 +313,7 @@ void wifiSetup() {
 
 WiFiUDP syslogSocket;
 void syslogSetup() {
+  /*
   if(atoi(config.get("syslog")->getValue()) == 1) {
     Serial.println("Syslog enabled");
     
@@ -323,9 +326,56 @@ void syslogSetup() {
   } else {
     Syslogger = new Syslog();
   }
+  */
+  Serial.println("Syslog enabled");
+  Syslogger = new Syslog(syslogSocket, "192.168.1.15", 514, "192.168.1.4", "garage");
+  Syslogger->setMinimumSeverity(7);
+  Syslogger->send(SYSLOG_INFO, "Device booted.");
 }
 
 void pubSubSetup() {
+  pubSub = new PubSub("192.168.1.15", 8883, true, "garage");
+  pubSub->setCallback(pubSubCallback);
+  
+  pubSub->setSubscribeChannel(SUBSCRIBE_CHANNEL);
+  pubSub->setPublishChannel(PUBLISH_CHANNEL);
+
+  pubSub->setAuthMode(AUTH_MODE_CERTIFICATE);
+
+  Syslogger->send(SYSLOG_INFO, "Loading certificate.");
+  pubSub->setFingerprint("96 AB 4C 46 6B EF CC 96 18 4D 3F 13 F3 21 0A 1B 37 9E 02 F7");
+  
+  switch(pubSub->loadCertificate("/client.crt.der")) {
+    case E_MQTT_OK:
+      Syslogger->send(SYSLOG_INFO, "Certificate loaded.");
+      break;
+    case E_MQTT_CERT_NOT_LOADED:
+      Syslogger->send(SYSLOG_ERROR, "Certificate not loaded.");
+      break;
+    case E_MQTT_CERT_FILE_NOT_FOUND:
+      Syslogger->send(SYSLOG_ERROR, "Couldn't find certificate file.");
+      break;
+    case E_MQTT_SPIFFS:
+      Syslogger->send(SYSLOG_CRITICAL, "Unable to start SPIFFS.");
+      break;
+  }
+  
+  Syslogger->send(SYSLOG_INFO, "Loading private key.");    
+  switch(pubSub->loadPrivateKey("/client.key.der")) {
+     case E_MQTT_OK:
+      Syslogger->send(SYSLOG_INFO, "Private key loaded.");
+      break;
+    case E_MQTT_PRIV_KEY_NOT_LOADED:
+      Syslogger->send(SYSLOG_ERROR, "Private key not loaded.");
+      break;
+    case E_MQTT_PRIV_KEY_FILE_NOT_FOUND:
+      Syslogger->send(SYSLOG_ERROR, "Couldn't find private key file.");
+      break;
+    case E_MQTT_SPIFFS:
+      Syslogger->send(SYSLOG_CRITICAL, "Unable to start SPIFFS.");
+      break;
+  }
+  /*
   int authMode = atoi(config.get("mqttAuthMode")->getValue());
   int tls = atoi(config.get("mqttTLS")->getValue());
   
@@ -378,19 +428,13 @@ void pubSubSetup() {
         break;
     }
   }
-  
-  /*
-  pubSub->setSubscribeChannel(config.get("mqttSubscribeChannel")->getValue());
-  pubSub->setPublishChannel(config.get("mqttPublishChannel")->getValue());
-  pubSub->setAuthentication(config.get("mqttUsername")->getValue(), config.get("mqttPassword")->getValue());
-  pubSub->setCertificate(config.get("cert")->getValue(), config.get("certKey")->getValue());
   */
 }
 
 void setup() {
-  Serial.begin(115200);
+  //Serial.begin(115200);
 
-  /*
+  
   pinMode(RELAY_GND, OUTPUT);
   digitalWrite(RELAY_GND, HIGH);
 
@@ -399,12 +443,12 @@ void setup() {
   
   pinMode(CLOSED_SWITCH, INPUT);
   pinMode(OPENED_SWITCH, INPUT);
-  */
   
-  //digitalWrite(RELAY, LOW);
-  //digitalWrite(RELAY_GND, LOW);
   
-  configSetup();
+  digitalWrite(RELAY, LOW);
+  digitalWrite(RELAY_GND, LOW);
+  
+  //configSetup();
   wifiSetup();
   syslogSetup();
   pubSubSetup();
@@ -416,6 +460,6 @@ void loop() {
   }
   
   pubSub->loop();
-  //triggerLoop();
-  //readDoorLoop();
+  triggerLoop();
+  readDoorLoop();
 }

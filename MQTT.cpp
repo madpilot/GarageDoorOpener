@@ -21,7 +21,7 @@ PubSub::PubSub(const char *server, int port, bool tls, const char *deviceName) {
   
   _qosLevel = 0;
   
-  client.setServer(server, port);
+  client.setServer(_server, _port);
 }
 
 void PubSub::setCallback(MQTT_CALLBACK_SIGNATURE) {
@@ -85,22 +85,18 @@ mqtt_result PubSub::loadPrivateKey(const char *keyPath) {
 }
 
 mqtt_result PubSub::connect() {
-  //Syslogger->send(SYSLOG_INFO, "Connecting to MQTT server.");
-
   boolean connected = false;
 
-  Syslogger->send(SYSLOG_INFO, "Resolving");
-  //resolver.query("myles-xps13.local");
+  resolver.query("mqtt.local");
 
+  
   if(_authMode == AUTH_MODE_CERTIFICATE) {
     if(!secureWifi.connect(_server, _port)) {
       return E_MQTT_CONNECT;
     }
     
-    if(secureWifi.verify(_fingerprint, "myles-xps13.local")) {
-      //Syslogger->send(SYSLOG_INFO, "MQTT server verified.");
-    } else {
-      //Syslogger->send(SYSLOG_ALERT, "MQTT server failed fingerprint check!"); 
+    if(!secureWifi.verify(_fingerprint, "mqtt.local")) {
+      Syslogger->send(SYSLOG_ERROR, "Fingerprint verification failed.");
       return E_MQTT_VERIFICATION;
     }
     
@@ -118,21 +114,15 @@ mqtt_result PubSub::connect() {
   } 
   
   if(!connected) {
-    //Syslogger->send(SYSLOG_ERROR, "Unable to connect to MQTT server. Will try again in 5 seconds.");
     return E_MQTT_CONNECT;
   }
 
   if(_subscribeChannel != NULL && _subscribeChannel != "") {
     if(!client.subscribe(_subscribeChannel, _qosLevel)) {
-      //Syslogger->send(SYSLOG_ERROR, "Unable to subscribed to channel.");
-      //Serial.println(_subscribeChannel);
       client.disconnect();
       return E_MQTT_SUBSCRIBE;
-    } else {
-      //Syslogger->send(SYSLOG_INFO, "Subscribed to channel.");
     }
   } else {
-    //Syslogger->send(SYSLOG_ERROR, "No subscribe channel set.");
     return E_MQTT_NO_SUBSCRIBE_CHANNEL;
   }
 
@@ -148,7 +138,6 @@ mqtt_result PubSub::publish(const char *message) {
     }
   } else {
     return E_MQTT_NO_PUBLISH_CHANNEL;
-    //Syslogger->send(SYSLOG_ERROR, "No publish channel set.");
   }
 }
 
@@ -160,12 +149,14 @@ void PubSub::loop() {
     long now = millis();
 
     if(now - lastConnectionAttempt > 5000) {
-      Syslogger->send(SYSLOG_INFO, "Attempting connection to MQTT server.");
-
       lastConnectionAttempt = now;
-      if(this->connect() == E_MQTT_OK) {
+      mqtt_result connectResult = this->connect();
+      if(connectResult == E_MQTT_OK) {
         Syslogger->send(SYSLOG_INFO, "Connected to MQTT server.");
         lastConnectionAttempt = 0;
+      } else if(connectResult == E_MQTT_WAITING) {
+        // Waiting for DNS...
+        lastConnectionAttempt = now - 1000;
       } else {
         Syslogger->send(SYSLOG_ERROR, "Connection failed.");
       }
