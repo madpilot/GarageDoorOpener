@@ -17,6 +17,7 @@ Syslog *Syslogger;
 
 #define OPEN_COMMAND "OPEN"
 #define CLOSE_COMMAND "CLOSE"
+#define STOP_COMMAND "STOP"
 
 #define OPENED_PAYLOAD "OPENED"
 #define CLOSED_PAYLOAD "CLOSED"
@@ -51,11 +52,14 @@ void pubSubCallback(char* topic, byte* payload, unsigned int length) {
   p[length] = '\0';
 
   if(strcmp(p, CLOSE_COMMAND) == 0) {
-    Syslogger->send(SYSLOG_INFO, "Closing the garage");
+    Syslogger->send(SYSLOG_INFO, "Closing the garage door");
     closeDoor();
   } else if(strcmp(p, OPEN_COMMAND) == 0) {
-    Syslogger->send(SYSLOG_INFO, "Opening the garage");
+    Syslogger->send(SYSLOG_INFO, "Opening the garage door");
     openDoor();
+  } else if(strcmp(p, STOP_COMMAND) == 0) {
+    Syslogger->send(SYSLOG_INFO, "Stopping the garage door");
+    stopDoor();
   }
   free(p);
 }
@@ -151,6 +155,17 @@ void closeDoor() {
     if(current == CLOSING_STATE) {
       setDoorState(OPENING_STATE);
     }
+  }
+}
+
+void stopDoor() {
+  int current = getDoorState();
+
+  // Triggering again, stops the door. If we are already stopped
+  // Don't do anything.
+  if(current != CLOSED_STATE && current != OPEN_STATE) {
+    trigger();
+    setDoorState(OPEN_STATE);  
   }
 }
 
@@ -273,7 +288,6 @@ void wifiSetup() {
   */
 
   if(configMode) {
-    Serial.println("Going in to config mode");
     wifiManager.startConfigPortal(CONFIG_AP_SSID);
   } else {  
     wifiManager.autoConnect(CONFIG_AP_SSID);
