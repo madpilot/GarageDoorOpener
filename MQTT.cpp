@@ -1,11 +1,14 @@
 #include "MQTT.h"
-#include "Syslogger.h";
-#include "mDNSResolver.h";
+#include "Syslogger.h"
+#include <mDNSResolver.h>
 
 WiFiClient wifi;
 WiFiClientSecure secureWifi;
 PubSubClient client;
-mDNSResolver::Resolver resolver;
+WiFiUDP udp;
+
+
+mDNSResolver::Resolver resolver(udp);
 
 PubSub::PubSub(const char *server, int port, bool tls, const char *deviceName) {  
   if(tls) {
@@ -14,14 +17,14 @@ PubSub::PubSub(const char *server, int port, bool tls, const char *deviceName) {
     client.setClient(wifi);
   }
 
+  resolver.setLocalIP(WiFi.localIP());
+
   _authMode = AUTH_MODE_NONE;
   _server = server;
   _port = port;
   _deviceName = deviceName;
   
   _qosLevel = 0;
-  
-  client.setServer(_server, _port);
 }
 
 void PubSub::setCallback(MQTT_CALLBACK_SIGNATURE) {
@@ -85,29 +88,37 @@ mqtt_result PubSub::loadPrivateKey(const char *keyPath) {
 }
 
 mqtt_result PubSub::connect() {
-  boolean connected = false;
-
-  resolver.query("mqtt.local");
-
   
   if(_authMode == AUTH_MODE_CERTIFICATE) {
-    if(!secureWifi.connect(_server, _port)) {
-      return E_MQTT_CONNECT;
+    client.disconnect();
+    secureWifi.stop();
+    
+    IPAddress resolved = resolver.search(_server);
+    
+    if(resolved == INADDR_NONE) {
+      client.setServer(_server, _port);
+      if(!secureWifi.connect(_server, _port)) {
+        return E_MQTT_CONNECT;
+      }
+    } else {
+      client.setServer(resolved, _port);
+      if(!secureWifi.connect(resolved, _port)) {
+        return E_MQTT_CONNECT;
+      }
     }
     
-    if(!secureWifi.verify(_fingerprint, "mqtt.local")) {
-      Syslogger->send(SYSLOG_ERROR, "Fingerprint verification failed.");
+    if(!secureWifi.verify(_fingerprint, _server)) {
       return E_MQTT_VERIFICATION;
     }
     
     secureWifi.stop();
   }
 
+  bool connected = false;
   switch(_authMode) {
     case AUTH_MODE_NONE:
     case AUTH_MODE_CERTIFICATE:
       connected = client.connect(_deviceName);
-      break;
     case AUTH_MODE_USERNAME:
       connected = client.connect(_deviceName, _username, _password);
       break;
@@ -123,6 +134,7 @@ mqtt_result PubSub::connect() {
       return E_MQTT_SUBSCRIBE;
     }
   } else {
+    client.disconnect();
     return E_MQTT_NO_SUBSCRIBE_CHANNEL;
   }
 
@@ -142,25 +154,7 @@ mqtt_result PubSub::publish(const char *message) {
 }
 
 long lastConnectionAttempt = 0;
-void PubSub::loop() {
-  mdns_result resolverResult = resolver.loop();
-  if(resolverResult != E_MDNS_OK) {
-    switch(resolverResult) {
-      case E_MDNS_TOO_BIG:
-        Syslogger->send(SYSLOG_INFO, "mDNS packet too big.");
-        break;
-      case E_MDNS_POINTER_OVERFLOW:
-        Syslogger->send(SYSLOG_ERROR, "mDNS packet had an overflowing pointer.");
-        break;
-      case E_MDNS_PACKET_ERROR:
-        Syslogger->send(SYSLOG_INFO, "mDNS packet invalid.");
-        break;
-      case E_MDNS_PARSING_ERROR:
-        Syslogger->send(SYSLOG_INFO, "Unable to parse mDNS packet.");
-        break;
-    }
-  }
-    
+void PubSub::loop() {  
   if(!client.connected()) {
     long now = millis();
 
@@ -168,17 +162,11 @@ void PubSub::loop() {
       lastConnectionAttempt = now;
       mqtt_result connectResult = this->connect();
       if(connectResult == E_MQTT_OK) {
-        Syslogger->send(SYSLOG_INFO, "Connected to MQTT server.");
         lastConnectionAttempt = 0;
-      } else if(connectResult == E_MQTT_WAITING) {
-        // Waiting for DNS...
-        lastConnectionAttempt = now - 1000;
-      } else {
-        Syslogger->send(SYSLOG_ERROR, "Connection failed.");
       }
     }
   } else {
     client.loop();
   }
+  resolver.loop();
 }
-
