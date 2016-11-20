@@ -1,8 +1,8 @@
 #include <ESP8266WiFi.h>
 #include <WiFiUdp.h>
 
-#include "WiFiManager.h" 
-//#include "Config.h"
+//#include "WiFiManager.h" 
+#include "Config.h"
 #include "MQTT.h"
 
 #include "Syslogger.h"
@@ -40,7 +40,7 @@ int saveFlag = false;
 bool configMode = false;
 int doorState = CLOSED;
 
-//Config config;
+Config config;
 PubSub *pubSub = NULL;
 
 void closeDoor();
@@ -65,7 +65,7 @@ void pubSubCallback(char* topic, byte* payload, unsigned int length) {
 }
 
 void setNetworkName(const char *name) {
-  wifi_station_set_hostname((char *)name);
+  //wifi_station_set_hostname((char *)name);
 }
 
 int getDoorState() {
@@ -169,29 +169,10 @@ void stopDoor() {
   }
 }
 
-/*
 void configSetup() {
-  config.addKey("ssid", "", 32);
-  config.addKey("passkey", "", 32);
-  config.addKey("encryption", "0", 1);
+  Serial.println("configSetup();");
   
-  config.addKey("mqttDeviceName", "garage", 32);
-  
-  config.addKey("mqttServer", "", 128);
-  config.addKey("mqttPort", "1883", 5);
-
-  config.addKey("mqttAuthMode", "0", 1);
-  config.addKey("mqttTLS", TLS_NO, 1);
-  
-  config.addKey("mqttUsername", "", 32);
-  config.addKey("mqttPassword", "", 32);
-  
-  config.addKey("mqttFingerprint", "", 64);
-
-  config.addKey("syslog", "0", 1);
-  config.addKey("syslogHost", "", 128);
-  config.addKey("syslogPort", "514", 5);
-  config.addKey("syslogLevel", "6", 1);
+  Serial.println(ESP.getFreeHeap());
   
   switch(config.read()) {
     case E_CONFIG_OK:
@@ -210,15 +191,16 @@ void configSetup() {
       Serial.println("E_CONFIG_PARSE_ERROR: File was not parsable");
       return;
   }
+  Serial.println(ESP.getFreeHeap());
+  
 }
-*/
 
 void saveCallback() {
   saveFlag = true;
 }
 
 void wifiSetup() {
-  WiFiManager wifiManager;
+  //WiFiManager wifiManager;
   /*
   ConfigOption *ssid = config.get("ssid");
   WiFiManagerParameter ssid_parameter(ssid->getKey(), ssid->getValue(), ssid->getLength());
@@ -287,11 +269,13 @@ void wifiSetup() {
   wifiManager.setSaveConfigCallback(saveCallback);
   */
 
+  /*
   if(configMode) {
     wifiManager.startConfigPortal(CONFIG_AP_SSID);
   } else {  
     wifiManager.autoConnect(CONFIG_AP_SSID);
   }
+  */
   
   /*
   ssid->setValue(ssid_parameter.getValue());
@@ -321,43 +305,39 @@ void wifiSetup() {
   }
   */
 
-  setNetworkName("garage");
-  //setNetworkName(mqttDeviceName->getValue());
+  WiFi.disconnect();
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(config.get_ssid(), config.get_passkey());
+  int WiFiCounter = 0;
+  while (WiFi.status() != WL_CONNECTED && WiFiCounter < 30) {
+    delay(1000);
+    WiFiCounter++;
+  }
+  
+  setNetworkName(config.get_deviceName());
 }
 
 WiFiUDP syslogSocket;
 void syslogSetup() {
-  /*
-  if(atoi(config.get("syslog")->getValue()) == 1) {
+  if(config.get_syslog()) {
     Serial.println("Syslog enabled");
-    
-    char *ip = new char[16];
-    strncpy(ip, WiFi.localIP().toString().c_str(), 15);
-    
-    Syslogger = new Syslog(syslogSocket, config.get("syslogHost")->getValue(), atoi(config.get("syslogPort")->getValue()), ip, config.get("mqttDeviceName")->getValue());
-    Syslogger->setMinimumSeverity(atoi(config.get("syslogLevel")->getValue()));
+    Syslogger = new Syslog(syslogSocket, config.get_syslogHost(), config.get_syslogPort(), config.get_deviceName(), config.get_deviceName());
+    Syslogger->setMinimumSeverity(config.get_syslogLevel());
     Syslogger->send(SYSLOG_INFO, "Device booted.");
-  } else {
-    Syslogger = new Syslog();
   }
-  */
-  Serial.println("Syslog enabled");
-  Syslogger = new Syslog(syslogSocket, "192.168.1.15", 514, "192.168.1.4", "garage");
-  Syslogger->setMinimumSeverity(7);
-  Syslogger->send(SYSLOG_INFO, "Device booted.");
 }
 
-void pubSubSetup() {
-  pubSub = new PubSub("192.168.1.15", 8883, true, "garage");
+void pubSubSetup() {  
+  pubSub = new PubSub(config.get_mqttServerName(), config.get_mqttPort(), config.get_mqttTLS(), config.get_deviceName());
   pubSub->setCallback(pubSubCallback);
   
-  pubSub->setSubscribeChannel(SUBSCRIBE_CHANNEL);
-  pubSub->setPublishChannel(PUBLISH_CHANNEL);
+  pubSub->setSubscribeChannel(config.get_mqttSubscribeChannel());
+  pubSub->setPublishChannel(config.get_mqttPublishChannel());
 
-  pubSub->setAuthMode(AUTH_MODE_CERTIFICATE);
+  pubSub->setAuthMode(config.get_mqttAuthMode());
 
   Syslogger->send(SYSLOG_INFO, "Loading certificate.");
-  pubSub->setFingerprint("96 AB 4C 46 6B EF CC 96 18 4D 3F 13 F3 21 0A 1B 37 9E 02 F7");
+  pubSub->setFingerprint(config.get_mqttFingerprint());
   
   switch(pubSub->loadCertificate("/client.crt.der")) {
     case E_MQTT_OK:
@@ -389,66 +369,11 @@ void pubSubSetup() {
       Syslogger->send(SYSLOG_CRITICAL, "Unable to start SPIFFS.");
       break;
   }
-  /*
-  int authMode = atoi(config.get("mqttAuthMode")->getValue());
-  int tls = atoi(config.get("mqttTLS")->getValue());
-  
-  pubSub = new PubSub(config.get("mqttServer")->getValue(), atoi(config.get("mqttPort")->getValue()), tls, config.get("mqttDeviceName")->getValue());
-  pubSub->setCallback(pubSubCallback);
-  
-  pubSub->setSubscribeChannel(SUBSCRIBE_CHANNEL);
-  pubSub->setPublishChannel(PUBLISH_CHANNEL);
-
-  pubSub->setAuthMode(authMode);
-
-  if(authMode == AUTH_MODE_USERNAME) {
-    Syslogger->send(SYSLOG_INFO, "Using username and password for authentication.");
-    pubSub->setAuthentication(config.get("mqttUsername")->getValue(), config.get("mqttPassword")->getValue());
-  } else if(authMode == AUTH_MODE_CERTIFICATE) {
-    Syslogger->send(SYSLOG_INFO, "Using certificate for authentication.");
-    pubSub->setFingerprint(config.get("mqttFingerprint")->getValue());
-  }
-
-  if(tls || authMode == AUTH_MODE_CERTIFICATE) {
-    Syslogger->send(SYSLOG_INFO, "Loading certificate.");
-    switch(pubSub->loadCertificate("/client.crt.der")) {
-      case E_MQTT_OK:
-        Syslogger->send(SYSLOG_INFO, "Certificate loaded.");
-        break;
-      case E_MQTT_CERT_NOT_LOADED:
-        Syslogger->send(SYSLOG_ERROR, "Certificate not loaded.");
-        break;
-      case E_MQTT_CERT_FILE_NOT_FOUND:
-        Syslogger->send(SYSLOG_ERROR, "Couldn't find certificate file.");
-        break;
-      case E_MQTT_SPIFFS:
-        Syslogger->send(SYSLOG_CRITICAL, "Unable to start SPIFFS.");
-        break;
-    }
-    
-    Syslogger->send(SYSLOG_INFO, "Loading private key.");    
-    switch(pubSub->loadPrivateKey("/client.key.der")) {
-       case E_MQTT_OK:
-        Syslogger->send(SYSLOG_INFO, "Private key loaded.");
-        break;
-      case E_MQTT_PRIV_KEY_NOT_LOADED:
-        Syslogger->send(SYSLOG_ERROR, "Private key not loaded.");
-        break;
-      case E_MQTT_PRIV_KEY_FILE_NOT_FOUND:
-        Syslogger->send(SYSLOG_ERROR, "Couldn't find private key file.");
-        break;
-      case E_MQTT_SPIFFS:
-        Syslogger->send(SYSLOG_CRITICAL, "Unable to start SPIFFS.");
-        break;
-    }
-  }
-  */
 }
 
 void setup() {
   //Serial.begin(115200);
 
-  
   pinMode(RELAY_GND, OUTPUT);
   digitalWrite(RELAY_GND, HIGH);
 
@@ -462,12 +387,13 @@ void setup() {
   digitalWrite(RELAY, LOW);
   digitalWrite(RELAY_GND, LOW);
   
-  //configSetup();
+  configSetup();
   wifiSetup();
   syslogSetup();
   pubSubSetup();
 }
 
+long memdelay = 0;
 void loop() {
   if(configMode) {
     return;
@@ -476,4 +402,10 @@ void loop() {
   pubSub->loop();
   triggerLoop();
   readDoorLoop();
+
+  long memnow = millis();
+  if(memnow - memdelay > 1000) {
+    Serial.println(ESP.getFreeHeap());
+    memdelay = memnow;
+  }
 }

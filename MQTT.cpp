@@ -7,10 +7,9 @@ WiFiClientSecure secureWifi;
 PubSubClient client;
 WiFiUDP udp;
 
-
 mDNSResolver::Resolver resolver(udp);
 
-PubSub::PubSub(const char *server, int port, bool tls, const char *deviceName) {  
+PubSub::PubSub(char *server, int port, bool tls, char *deviceName) {  
   if(tls) {
     client.setClient(secureWifi);
   } else {
@@ -57,8 +56,10 @@ mqtt_result PubSub::loadCertificate(const char *certPath) {
     File cert = SPIFFS.open(certPath, "r");
     if(cert) {
       if(secureWifi.loadCertificate(cert)) {
+        cert.close();
         return E_MQTT_OK;
       } else {
+        cert.close();
         return E_MQTT_CERT_NOT_LOADED;
       }
     } else {
@@ -75,8 +76,10 @@ mqtt_result PubSub::loadPrivateKey(const char *keyPath) {
     
     if(key) {
       if(secureWifi.loadPrivateKey(key)) {
+        key.close();
         return E_MQTT_OK;
       } else {
+        key.close();
         return E_MQTT_PRIV_KEY_NOT_LOADED;
       }
     } else {
@@ -88,13 +91,12 @@ mqtt_result PubSub::loadPrivateKey(const char *keyPath) {
 }
 
 mqtt_result PubSub::connect() {
-  
   if(_authMode == AUTH_MODE_CERTIFICATE) {
     client.disconnect();
     secureWifi.stop();
     
     IPAddress resolved = resolver.search(_server);
-    
+
     if(resolved == INADDR_NONE) {
       client.setServer(_server, _port);
       if(!secureWifi.connect(_server, _port)) {
@@ -113,7 +115,7 @@ mqtt_result PubSub::connect() {
     
     secureWifi.stop();
   }
-
+  
   bool connected = false;
   switch(_authMode) {
     case AUTH_MODE_NONE:
