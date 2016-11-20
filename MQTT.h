@@ -34,7 +34,7 @@
 
 class PubSub {
   public:
-    PubSub(const char *server, int port, bool tls, const char *deviceName);
+    PubSub(char *server, int port, bool tls, char *deviceName);
 
     void setCallback(MQTT_CALLBACK_SIGNATURE);    
     void setSubscribeChannel(const char *channel);
