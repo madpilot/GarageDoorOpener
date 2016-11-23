@@ -5,7 +5,7 @@
 Config::Config() {
   this->ssid = NULL;
   this->passkey = NULL;
-  this->encryption = false;
+  this->encryption = 7;
   this->deviceName = NULL;
 
   this->mqttServerName = NULL;
@@ -26,6 +26,12 @@ Config::Config() {
   this->syslogPort = 514;
   this->syslogLevel = 6;
 
+  this->dhcp = true;
+  this->staticIP = NULL;
+  this->staticDNS = NULL;
+  this->staticGateway = NULL;
+  this->staticSubnet = NULL;
+
 	this->set_ssid("");
 	this->set_passkey("");
 	this->set_deviceName("");
@@ -36,6 +42,10 @@ Config::Config() {
 	this->set_mqttPublishChannel("");
 	this->set_mqttSubscribeChannel("");
 	this->set_syslogHost("");
+  this->set_staticIP("");
+  this->set_staticDNS("");
+  this->set_staticGateway("");
+  this->set_staticSubnet("");
 }
 
 char* Config::get_ssid() {
@@ -46,7 +56,7 @@ char* Config::get_passkey() {
   return passkey;
 }
 
-bool Config::get_encryption() {
+int Config::get_encryption() {
   return encryption;
 }
 
@@ -106,6 +116,27 @@ int Config::get_syslogLevel() {
   return syslogLevel;
 }
 
+bool Config::get_dhcp() {
+  return dhcp;
+}
+
+char* Config::get_staticIP() {
+  return staticIP;
+}
+
+char* Config::get_staticDNS() {
+  return staticDNS;
+}
+
+char* Config::get_staticGateway() {
+  return staticGateway;
+}
+
+char* Config::get_staticSubnet() {
+  return staticSubnet;
+}
+
+// Setters
 void Config::set_ssid(const char* val) {
   allocString(&this->ssid, val);
 }
@@ -114,7 +145,7 @@ void Config::set_passkey(const char* val) {
   allocString(&this->passkey, val);
 }
 
-void Config::set_encryption(bool val) {
+void Config::set_encryption(int val) {
   this->encryption = val;
 }
 
@@ -174,6 +205,26 @@ void Config::set_syslogLevel(int val) {
   this->syslogLevel = val;
 }
 
+void Config::set_dhcp(bool val) {
+  this->dhcp = val;
+}
+
+void Config::set_staticIP(const char* val) {
+  allocString(&this->staticIP, val);
+}
+
+void Config::set_staticDNS(const char* val) {
+  allocString(&this->staticDNS, val);
+}
+
+void Config::set_staticGateway(const char* val) {
+  allocString(&this->staticGateway, val);
+}
+
+void Config::set_staticSubnet(const char* val) {
+  allocString(&this->staticSubnet, val);
+}
+
 bool Config::allocString(char **dest, const char *val) {
   if((*dest) != NULL) {
     free((*dest));
@@ -205,6 +256,10 @@ int Config::estimateSerializeBufferLength() {
   size += strlen(mqttPublishChannel) + 1;
   size += strlen(mqttSubscribeChannel) + 1;
   size += strlen(syslogHost) + 1;
+  size += strlen(staticIP) + 1;
+  size += strlen(staticDNS) + 1;
+  size += strlen(staticGateway) + 1;
+  size += strlen(staticSubnet) + 1;
   return size;
 }
 
@@ -250,16 +305,19 @@ int Config::serialize(unsigned char *buffer) {
 
   // Reserve a byte for booleans and flags
   // bit 0: Encryption
-  // bit 1: syslog
-  // bit 2: mqttAuthMode LSB
-  // bit 3: mqttAuthMode MSB
-  // bit 4: mqttTLS
-  // bit 5-7: unused
+  // bit 1: Encryption
+  // bit 2: Encryption
+  // bit 3: dhcp
+  // bit 4: syslog
+  // bit 5: mqttAuthMode LSB
+  // bit 6: mqttAuthMode MSB
+  // bit 7: mqttTLS
   buffer[1] = 0;
-  buffer[1] = buffer[1] | encryption & 0x01;
-  buffer[1] = buffer[1] | (syslog & 0x01) << 1;
-  buffer[1] = buffer[1] | (mqttAuthMode & 0x03) << 2;
-  buffer[1] = buffer[1] | (mqttTLS & 0x01) << 4;
+  buffer[1] = buffer[1] | (encryption & 0x07);
+  buffer[1] = buffer[1] | (dhcp & 0x01) << 3;
+  buffer[1] = buffer[1] | (syslog & 0x01) << 4;
+  buffer[1] = buffer[1] | (mqttAuthMode & 0x03) << 5;
+  buffer[1] = buffer[1] | (mqttTLS & 0x01) << 7;
 
   // mqttPort - 16 bit number
   buffer[2] = (mqttPort >> 8) & 0xFF;
@@ -283,6 +341,10 @@ int Config::serialize(unsigned char *buffer) {
   serializeString(buffer, mqttPublishChannel, &offset);
   serializeString(buffer, mqttSubscribeChannel, &offset);
   serializeString(buffer, syslogHost, &offset);
+  serializeString(buffer, staticIP, &offset);
+  serializeString(buffer, staticDNS, &offset);
+  serializeString(buffer, staticGateway, &offset);
+  serializeString(buffer, staticSubnet, &offset);
 
   return offset;
 }
@@ -296,10 +358,11 @@ config_result Config::deserialize(unsigned char *buffer, int length) {
     return E_CONFIG_CORRUPT;
   }
 
-  encryption = buffer[1] & 0x01;
-  syslog = (buffer[1] >> 1) & 0x01;
-  mqttAuthMode = (buffer[1] >> 2) & 0x03;
-  mqttTLS = (buffer[1] >> 4) & 0x01;
+  encryption = buffer[1] & 0x07;
+  dhcp = (buffer[1] >> 3) & 0x01;
+  syslog = (buffer[1] >> 4) & 0x01;
+  mqttAuthMode = (buffer[1] >> 5) & 0x03;
+  mqttTLS = (buffer[1] >> 7) & 0x01;
 
   mqttPort = (buffer[2] << 8) + buffer[3];
   syslogPort = (buffer[4] << 8) + buffer[5];
@@ -330,9 +393,19 @@ config_result Config::deserialize(unsigned char *buffer, int length) {
   if(result != E_CONFIG_OK) return result;
   result = deserializeString(buffer, length, &syslogHost, &offset);
   if(result != E_CONFIG_OK) return result;
+  result = deserializeString(buffer, length, &staticIP, &offset);
+  if(result != E_CONFIG_OK) return result;
+  result = deserializeString(buffer, length, &staticDNS, &offset);
+  if(result != E_CONFIG_OK) return result;
+  result = deserializeString(buffer, length, &staticGateway, &offset);
+  if(result != E_CONFIG_OK) return result;
+  result = deserializeString(buffer, length, &staticSubnet, &offset);
+  if(result != E_CONFIG_OK) return result;
 
   return E_CONFIG_OK;
 }
+
+
 
 config_result Config::read() {
   if (SPIFFS.begin()) {
@@ -349,7 +422,7 @@ config_result Config::read() {
 
         configFile.read(buffer, length);
         deserialize(buffer, length);
-        
+
         free(buffer);
 
         configFile.close();

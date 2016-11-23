@@ -1,7 +1,6 @@
 #include <ESP8266WiFi.h>
 #include <WiFiUdp.h>
 
-//#include "WiFiManager.h" 
 #include "Config.h"
 #include "MQTT.h"
 
@@ -191,115 +190,11 @@ void saveCallback() {
 }
 
 void wifiSetup() {
-  //WiFiManager wifiManager;
-  /*
-  ConfigOption *ssid = config.get("ssid");
-  WiFiManagerParameter ssid_parameter(ssid->getKey(), ssid->getValue(), ssid->getLength());
-  wifiManager.addParameter(&ssid_parameter);
-
-  ConfigOption *passkey = config.get("passkey");
-  WiFiManagerParameter passkey_parameter(passkey->getKey(), passkey->getValue(), passkey->getLength());
-  wifiManager.addParameter(&passkey_parameter);
-
-  ConfigOption *encryption = config.get("encryption");
-  WiFiManagerParameter encryption_parameter(encryption->getKey(), encryption->getValue(), encryption->getLength());
-  wifiManager.addParameter(&encryption_parameter);
-  
-  ConfigOption *mqttDeviceName = config.get("mqttDeviceName");
-  WiFiManagerParameter mqttDeviceName_parameter(mqttDeviceName->getKey(), mqttDeviceName->getValue(), mqttDeviceName->getLength());
-  wifiManager.addParameter(&mqttDeviceName_parameter);
-
-  ConfigOption *mqttServer = config.get("mqttServer");
-  WiFiManagerParameter mqttServer_parameter(mqttServer->getKey(), mqttServer->getValue(), mqttServer->getLength());
-  wifiManager.addParameter(&mqttServer_parameter);
-
-  ConfigOption *mqttPort = config.get("mqttPort");
-  WiFiManagerParameter mqttPort_parameter(mqttPort->getKey(), mqttPort->getValue(), mqttPort->getLength());
-  wifiManager.addParameter(&mqttPort_parameter);
-
-  ConfigOption *mqttAuthMode = config.get("mqttAuthMode");
-  WiFiManagerParameter mqttAuthMode_parameter(mqttAuthMode->getKey(), mqttAuthMode->getValue(), mqttAuthMode->getLength());
-  wifiManager.addParameter(&mqttAuthMode_parameter);
-
-  ConfigOption *mqttTLS = config.get("mqttTLS");
-  WiFiManagerParameter mqttTLS_parameter(mqttTLS->getKey(), mqttTLS->getValue(), mqttTLS->getLength());
-  wifiManager.addParameter(&mqttTLS_parameter);
-
-  ConfigOption *mqttUsername = config.get("mqttUsername");
-  WiFiManagerParameter mqttUsername_parameter(mqttUsername->getKey(), mqttUsername->getValue(), mqttUsername->getLength());
-  wifiManager.addParameter(&mqttUsername_parameter);
-
-  ConfigOption *mqttPassword = config.get("mqttPassword");
-  WiFiManagerParameter mqttPassword_parameter(mqttPassword->getKey(), mqttPassword->getValue(), mqttPassword->getLength());
-  wifiManager.addParameter(&mqttPassword_parameter);
-
-  ConfigOption *mqttPublishChannel = config.get("mqttPublishChannel");
-  WiFiManagerParameter mqttPublishChannel_parameter(mqttPublishChannel->getKey(), mqttPublishChannel->getValue(), mqttPublishChannel->getLength());
-  wifiManager.addParameter(&mqttPublishChannel_parameter);
-
-  ConfigOption *mqttSubscribeChannel = config.get("mqttSubscribeChannel");
-  WiFiManagerParameter mqttSubscribeChannel_parameter(mqttSubscribeChannel->getKey(), mqttSubscribeChannel->getValue(), mqttSubscribeChannel->getLength());
-  wifiManager.addParameter(&mqttSubscribeChannel_parameter);
-
-  ConfigOption *mqttRequestChannel = config.get("mqttRequestChannel");
-  WiFiManagerParameter mqttRequestChannel_parameter(mqttRequestChannel->getKey(), mqttRequestChannel->getValue(), mqttRequestChannel->getLength());
-  wifiManager.addParameter(&mqttRequestChannel_parameter);
-
-  ConfigOption *mqttCert = config.get("mqttCert");
-  WiFiManagerParameter mqttCert_parameter(mqttCert->getKey(), mqttCert->getValue(), mqttCert->getLength());
-  wifiManager.addParameter(&mqttCert_parameter);
-
-  ConfigOption *mqttCertKey = config.get("mqttCertKey");
-  WiFiManagerParameter mqttCertKey_parameter(mqttCertKey->getKey(), mqttCertKey->getValue(), mqttCertKey->getLength());
-  wifiManager.addParameter(&mqttCertKey_parameter);
-
-  ConfigOption *mqttFingerprint = config.get("mqttFingerprint");
-  WiFiManagerParameter mqttFingerprint_parameter(mqttFingerprint->getKey(), mqttFingerprint->getValue(), mqttFingerprint->getLength());
-  wifiManager.addParameter(&mqttFingerprint_parameter);
-  
-  wifiManager.setSaveConfigCallback(saveCallback);
-  */
-
-  /*
-  if(configMode) {
-    wifiManager.startConfigPortal(CONFIG_AP_SSID);
-  } else {  
-    wifiManager.autoConnect(CONFIG_AP_SSID);
-  }
-  */
-  
-  /*
-  ssid->setValue(ssid_parameter.getValue());
-  passkey->setValue(passkey_parameter.getValue());
-  encryption->setValue(encryption_parameter.getValue());
-  
-  mqttDeviceName->setValue(mqttDeviceName_parameter.getValue());
-  
-  mqttServer->setValue(mqttServer_parameter.getValue());
-  mqttPort->setValue(mqttPort_parameter.getValue());
-  mqttAuthMode->setValue(mqttAuthMode_parameter.getValue());
-  mqttTLS->setValue(mqttTLS_parameter.getValue());
-  
-  mqttUsername->setValue(mqttUsername_parameter.getValue());
-  mqttPassword->setValue(mqttPassword_parameter.getValue());
-  
-  mqttPublishChannel->setValue(mqttPublishChannel_parameter.getValue());
-  mqttSubscribeChannel->setValue(mqttSubscribeChannel_parameter.getValue());
-  mqttRequestChannel->setValue(mqttRequestChannel_parameter.getValue());
-  
-  mqttCert->setValue(mqttCert_parameter.getValue());
-  mqttCertKey->setValue(mqttCertKey_parameter.getValue());
-  mqttFingerprint->setValue(mqttFingerprint_parameter.getValue());
-
-  if(saveFlag) {
-    config.write();
-  }
-  */
-
   WiFi.disconnect();
   WiFi.mode(WIFI_STA);
   WiFi.begin(config.get_ssid(), config.get_passkey());
   int WiFiCounter = 0;
+  
   while (WiFi.status() != WL_CONNECTED && WiFiCounter < 30) {
     delay(1000);
     WiFiCounter++;

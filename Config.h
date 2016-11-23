@@ -11,7 +11,6 @@
 #define E_CONFIG_UNKNOWN_VERSION  6
 #define E_CONFIG_CORRUPT          7
 
-//#include <EEPROM.h>
 #include <FS.h>
 
 class Config {
@@ -21,7 +20,7 @@ class Config {
     // Getters
     char* get_ssid();
     char* get_passkey();
-    bool get_encryption();
+    int get_encryption();
     char* get_deviceName();
 
     char* get_mqttServerName();
@@ -42,10 +41,16 @@ class Config {
     int get_syslogPort();
     int get_syslogLevel();
 
+    bool get_dhcp();
+    char* get_staticIP();
+    char* get_staticDNS();
+    char* get_staticGateway();
+    char* get_staticSubnet();
+
     // Setters
     void set_ssid(const char* val);
     void set_passkey(const char* val);
-    void set_encryption(bool val);
+    void set_encryption(int val);
     void set_deviceName(const char* val);
 
     void set_mqttServerName(const char* val);
@@ -66,13 +71,20 @@ class Config {
     void set_syslogPort(int val);
     void set_syslogLevel(int val);
 
-    config_result read();
+
+    void set_dhcp(bool val);;
+    void set_staticIP(const char* val);
+    void set_staticDNS(const char* val);
+    void set_staticGateway(const char* val);
+    void set_staticSubnet(const char* val);
+
     config_result write();
+    config_result read();
 
   private:
     char* ssid;
     char* passkey;
-    bool encryption;
+    int encryption;
     char* deviceName;
 
     char* mqttServerName;
@@ -93,6 +105,12 @@ class Config {
     int syslogPort;
     int syslogLevel;
 
+    bool dhcp;
+    char* staticIP;
+    char* staticDNS;
+    char* staticGateway;
+    char* staticSubnet;
+
     bool allocString(char **dest, const char *val);
     config_result deserialize(unsigned char *buffer, int length);
     config_result deserializeString(unsigned char *buffer, int bufferlen, char **string, int *offset);
@@ -102,5 +120,7 @@ class Config {
 
     int estimateSerializeBufferLength();
 };
+
+
 
 #endif
