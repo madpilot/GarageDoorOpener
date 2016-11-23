@@ -2,52 +2,335 @@
 
 #define CONFIG_FILE_PATH "/config.dat"
 
-ConfigOption::ConfigOption(const char *key, const char *value, int maxLength) {
-  _key = key;
-  _maxLength = maxLength;
-  setValue(value);
-}
-
-const char *ConfigOption::getKey() {
-  return _key;
-}
-
-const char *ConfigOption::getValue() {
-  return _value;
-}
-
-int ConfigOption::getLength() {
-  return _maxLength;
-}
-
-void ConfigOption::setValue(const char *value) {  
-  _value = (char *)malloc(sizeof(char) * (_maxLength + 1));
-
-  // NULL out the string, including a terminator
-  for(int i = 0; i < _maxLength + 1; i++) {
-    _value[i] = '\0';
-  }
-
-  if(value != NULL) {
-    strncpy(_value, value, _maxLength);
-  }
-}
-
 Config::Config() {
-  _optionCount = 0;
-};
+  this->ssid = NULL;
+  this->passkey = NULL;
+  this->encryption = false;
+  this->deviceName = NULL;
 
-config_result Config::addKey(const char *key, int maxLength) {
-  return addKey(key, NULL, maxLength);
+  this->mqttServerName = NULL;
+  this->mqttPort = 1883;
+
+  this->mqttAuthMode = 0;
+  this->mqttTLS = false;
+
+  this->mqttUsername = NULL;
+  this->mqttPassword = NULL;
+  this->mqttFingerprint = NULL;
+
+  this->mqttPublishChannel = NULL;
+  this->mqttSubscribeChannel = NULL;
+
+  this->syslog = false;
+  this->syslogHost = NULL;
+  this->syslogPort = 514;
+  this->syslogLevel = 6;
+
+	this->set_ssid("");
+	this->set_passkey("");
+	this->set_deviceName("");
+	this->set_mqttServerName("");
+	this->set_mqttUsername("");
+	this->set_mqttPassword("");
+	this->set_mqttFingerprint("");
+	this->set_mqttPublishChannel("");
+	this->set_mqttSubscribeChannel("");
+	this->set_syslogHost("");
 }
 
-config_result Config::addKey(const char *key, const char *value, int maxLength) {
-  if(_optionCount == CONFIG_MAX_OPTIONS) {
-    return E_CONFIG_MAX;
+char* Config::get_ssid() {
+  return ssid;
+}
+
+char* Config::get_passkey() {
+  return passkey;
+}
+
+bool Config::get_encryption() {
+  return encryption;
+}
+
+char* Config::get_deviceName() {
+  return deviceName;
+}
+
+char* Config::get_mqttServerName() {
+  return mqttServerName;
+}
+
+int Config::get_mqttPort() {
+  return mqttPort;
+}
+
+int Config::get_mqttAuthMode() {
+  return mqttAuthMode;
+}
+
+bool Config::get_mqttTLS() {
+  return mqttTLS;
+}
+
+char* Config::get_mqttUsername() {
+  return mqttUsername;
+}
+
+char* Config::get_mqttPassword() {
+  return mqttPassword;
+}
+
+char* Config::get_mqttFingerprint() {
+  return mqttFingerprint;
+}
+
+char* Config::get_mqttPublishChannel() {
+  return mqttPublishChannel;
+}
+
+char* Config::get_mqttSubscribeChannel() {
+  return mqttSubscribeChannel;
+}
+
+bool Config::get_syslog() {
+  return syslog;
+}
+
+char* Config::get_syslogHost() {
+  return syslogHost;
+}
+
+int Config::get_syslogPort() {
+  return syslogPort;
+}
+
+int Config::get_syslogLevel() {
+  return syslogLevel;
+}
+
+void Config::set_ssid(const char* val) {
+  allocString(&this->ssid, val);
+}
+
+void Config::set_passkey(const char* val) {
+  allocString(&this->passkey, val);
+}
+
+void Config::set_encryption(bool val) {
+  this->encryption = val;
+}
+
+void Config::set_deviceName(const char* val) {
+  allocString(&this->deviceName, val);
+}
+
+void Config::set_mqttServerName(const char* val) {
+  allocString(&this->mqttServerName, val);
+}
+
+void Config::set_mqttPort(int val) {
+  this->mqttPort = val;
+}
+
+void Config::set_mqttAuthMode(int val) {
+  this->mqttAuthMode = val;
+}
+
+void Config::set_mqttTLS(bool val) {
+  this->mqttTLS = val;
+}
+
+void Config::set_mqttUsername(const char* val) {
+  allocString(&this->mqttUsername, val);
+}
+
+void Config::set_mqttPassword(const char* val) {
+  allocString(&this->mqttPassword, val);
+}
+
+void Config::set_mqttFingerprint(const char* val) {
+  allocString(&this->mqttFingerprint, val);
+}
+
+void Config::set_mqttPublishChannel(const char* val) {
+  allocString(&this->mqttPublishChannel, val);
+}
+
+void Config::set_mqttSubscribeChannel(const char* val) {
+  allocString(&this->mqttSubscribeChannel, val);
+}
+
+void Config::set_syslog(bool val) {
+  this->syslog = val;
+}
+
+void Config::set_syslogHost(const char* val) {
+  allocString(&this->syslogHost, val);
+}
+
+void Config::set_syslogPort(int val) {
+  this->syslogPort = val;
+}
+
+void Config::set_syslogLevel(int val) {
+  this->syslogLevel = val;
+}
+
+bool Config::allocString(char **dest, const char *val) {
+  if((*dest) != NULL) {
+    free((*dest));
   }
-  _options[_optionCount] = new ConfigOption(key, value, maxLength);
-  _optionCount += 1;
-  
+
+  int len = strlen(val);
+  // Strings can't be longer than 255 characters. If they are, truncate them
+  if(len > 255) {
+    len = 255;
+  }
+
+  (*dest) = (char*)malloc(sizeof(char) * (len + 1));
+  if((*dest) == NULL) {
+    return false;
+  }
+  strncpy((*dest), val, len);
+  return true;
+}
+
+int Config::estimateSerializeBufferLength() {
+  int size = 7;
+  size += strlen(ssid) + 1;
+  size += strlen(passkey) + 1;
+  size += strlen(deviceName) + 1;
+  size += strlen(mqttServerName) + 1;
+  size += strlen(mqttUsername) + 1;
+  size += strlen(mqttPassword) + 1;
+  size += strlen(mqttFingerprint) + 1;
+  size += strlen(mqttPublishChannel) + 1;
+  size += strlen(mqttSubscribeChannel) + 1;
+  size += strlen(syslogHost) + 1;
+  return size;
+}
+
+void Config::serializeString(unsigned char *buffer, char *string, int *offset) {
+  if(string == NULL) {
+    buffer[(*offset)++] = 0;
+    return;
+  }
+
+  int len = strlen(string);
+  buffer[(*offset)++] = len;
+  memcpy(buffer + (*offset), string, len);
+  (*offset) += len;
+}
+
+config_result Config::deserializeString(unsigned char *buffer, int bufferlen, char **string, int *offset) {
+  int len = buffer[(*offset)++];
+
+  if((*offset) + len > bufferlen) {
+    return E_CONFIG_PARSE_ERROR;
+  }
+
+  if(*string != NULL) {
+    free(*string);
+  }
+
+  *string = (char *)malloc(sizeof(char) * (len + 1));
+
+  if(*string == NULL) {
+    return E_CONFIG_OUT_OF_MEMORY;
+  }
+
+  memcpy(*string, buffer + (*offset), len);
+  (*string)[len] = 0;
+
+  (*offset) += len;
+
+  return E_CONFIG_OK;
+}
+
+int Config::serialize(unsigned char *buffer) {
+  buffer[0] = 0; // Config version number
+
+  // Reserve a byte for booleans and flags
+  // bit 0: Encryption
+  // bit 1: syslog
+  // bit 2: mqttAuthMode LSB
+  // bit 3: mqttAuthMode MSB
+  // bit 4: mqttTLS
+  // bit 5-7: unused
+  buffer[1] = 0;
+  buffer[1] = buffer[1] | encryption & 0x01;
+  buffer[1] = buffer[1] | (syslog & 0x01) << 1;
+  buffer[1] = buffer[1] | (mqttAuthMode & 0x03) << 2;
+  buffer[1] = buffer[1] | (mqttTLS & 0x01) << 4;
+
+  // mqttPort - 16 bit number
+  buffer[2] = (mqttPort >> 8) & 0xFF;
+  buffer[3] = mqttPort & 0xFF;
+
+  // syslogPort - 16 bit number
+  buffer[4] = (syslogPort >> 8) & 0xff;
+  buffer[5] = syslogPort & 0xFF;
+
+  // syslogLevel - 8 bit number
+  buffer[6] = syslogLevel & 0xFF;
+
+  int offset = 7;
+  serializeString(buffer, ssid, &offset);
+  serializeString(buffer, passkey, &offset);
+  serializeString(buffer, deviceName, &offset);
+  serializeString(buffer, mqttServerName, &offset);
+  serializeString(buffer, mqttUsername, &offset);
+  serializeString(buffer, mqttPassword, &offset);
+  serializeString(buffer, mqttFingerprint, &offset);
+  serializeString(buffer, mqttPublishChannel, &offset);
+  serializeString(buffer, mqttSubscribeChannel, &offset);
+  serializeString(buffer, syslogHost, &offset);
+
+  return offset;
+}
+
+config_result Config::deserialize(unsigned char *buffer, int length) {
+  if(buffer[0] != 0) {
+    return E_CONFIG_UNKNOWN_VERSION;
+  }
+
+  if(length < 17) {
+    return E_CONFIG_CORRUPT;
+  }
+
+  encryption = buffer[1] & 0x01;
+  syslog = (buffer[1] >> 1) & 0x01;
+  mqttAuthMode = (buffer[1] >> 2) & 0x03;
+  mqttTLS = (buffer[1] >> 4) & 0x01;
+
+  mqttPort = (buffer[2] << 8) + buffer[3];
+  syslogPort = (buffer[4] << 8) + buffer[5];
+
+  syslogLevel = buffer[6];
+
+  int offset = 7;
+
+  config_result result;
+
+  result = deserializeString(buffer, length, &ssid, &offset);
+  if(result != E_CONFIG_OK) return result;
+  result = deserializeString(buffer, length, &passkey, &offset);
+  if(result != E_CONFIG_OK) return result;
+  result = deserializeString(buffer, length, &deviceName, &offset);
+  if(result != E_CONFIG_OK) return result;
+  result = deserializeString(buffer, length, &mqttServerName, &offset);
+  if(result != E_CONFIG_OK) return result;
+  result = deserializeString(buffer, length, &mqttUsername, &offset);
+  if(result != E_CONFIG_OK) return result;
+  result = deserializeString(buffer, length, &mqttPassword, &offset);
+  if(result != E_CONFIG_OK) return result;
+  result = deserializeString(buffer, length, &mqttFingerprint, &offset);
+  if(result != E_CONFIG_OK) return result;
+  result = deserializeString(buffer, length, &mqttPublishChannel, &offset);
+  if(result != E_CONFIG_OK) return result;
+  result = deserializeString(buffer, length, &mqttSubscribeChannel, &offset);
+  if(result != E_CONFIG_OK) return result;
+  result = deserializeString(buffer, length, &syslogHost, &offset);
+  if(result != E_CONFIG_OK) return result;
+
   return E_CONFIG_OK;
 }
 
@@ -55,34 +338,21 @@ config_result Config::read() {
   if (SPIFFS.begin()) {
     if (SPIFFS.exists(CONFIG_FILE_PATH)) {
       File configFile = SPIFFS.open(CONFIG_FILE_PATH, "r");
-      
-      if (configFile) {        
-        int i = 0;
-        int offset = 0;
-        int length = 0;
 
-        for(i = 0; i < _optionCount; i++) {
-          length += _options[i]->getLength();
+      if (configFile) {
+        int length = configFile.size();
+
+        unsigned char *buffer = (unsigned char *)malloc(sizeof(unsigned char) * length);
+        if(buffer == NULL) {
+          return E_CONFIG_OUT_OF_MEMORY;
         }
 
-        if(length != configFile.size()) {
-          return E_CONFIG_PARSE_ERROR;
-        }
+        configFile.read(buffer, length);
+        deserialize(buffer, length);
+        
+        free(buffer);
 
-        uint8_t *content = (uint8_t *)malloc(sizeof(uint8_t) * length);
-        configFile.read(content, length);
-        
-        for(i = 0; i < _optionCount; i++) {
-          // Because we know the right number of bytes gets copied,
-          // and it gets null terminated,
-          // we can just pass in an offset pointer to save a temporary variable
-          _options[i]->setValue((const char *)(content + offset));
-          offset += _options[i]->getLength();
-        }
-        
-        configFile.close();             
-        free(content);
-        
+        configFile.close();
         return E_CONFIG_OK;
       } else {
         configFile.close();
@@ -97,47 +367,28 @@ config_result Config::read() {
 }
 
 config_result Config::write() {
+  int bufferLength = estimateSerializeBufferLength();
+  unsigned char *buffer = (unsigned char *)malloc(sizeof(unsigned char) * bufferLength);
+  if(buffer == NULL) {
+    return E_CONFIG_OUT_OF_MEMORY;
+  }
+
+  int length = serialize(buffer);
+
   if (SPIFFS.begin()) {
-    int i = 0;
-    int offset = 0;
-    int length = 0;
-
-    for(i = 0; i < _optionCount; i++) {
-      length += _options[i]->getLength();
-    }
-
     File configFile = SPIFFS.open(CONFIG_FILE_PATH, "w+");
+
     if(configFile) {
-      uint8_t *content = (uint8_t *)malloc(sizeof(uint8_t) * length);
-      for(i = 0; i < _optionCount; i++) {
-        memcpy(content + offset, _options[i]->getValue(), _options[i]->getLength());
-        offset += _options[i]->getLength();
-      }
-      
-      configFile.write(content, length);
+      configFile.write(buffer, length);
       configFile.close();
-      
-      free(content);
+
+      free(buffer);
       return E_CONFIG_OK;
     } else {
+      free(buffer);
       return E_CONFIG_FILE_OPEN;
     }
   }
-  
+  free(buffer);
   return E_CONFIG_FS_ACCESS;
 }
-
-/*
- * Returns the config option that maps to the supplied key.
- * Returns NULL if not found
- */
-ConfigOption *Config::get(const char *key) {
-  for(int i = 0; i < _optionCount; i++) {
-    if(strcmp(_options[i]->getKey(), key) == 0) {
-      return _options[i];  
-    }
-  }
-  
-  return NULL;
-}
-

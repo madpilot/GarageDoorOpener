@@ -24,9 +24,6 @@ Syslog *Syslogger;
 #define OPENING_PAYLOAD "OPENING"
 #define CLOSING_PAYLOAD "CLOSING"
 
-#define PUBLISH_CHANNEL "home-assistant/cover"
-#define SUBSCRIBE_CHANNEL "home-assistant/cover/set"
-
 #define TLS_NO "0"
 #define TLS_YES "1"
 
@@ -170,10 +167,6 @@ void stopDoor() {
 }
 
 void configSetup() {
-  Serial.println("configSetup();");
-  
-  Serial.println(ESP.getFreeHeap());
-  
   switch(config.read()) {
     case E_CONFIG_OK:
       Serial.println("Config read");
@@ -191,8 +184,6 @@ void configSetup() {
       Serial.println("E_CONFIG_PARSE_ERROR: File was not parsable");
       return;
   }
-  Serial.println(ESP.getFreeHeap());
-  
 }
 
 void saveCallback() {
@@ -373,7 +364,7 @@ void pubSubSetup() {
 
 void setup() {
   //Serial.begin(115200);
-
+  
   pinMode(RELAY_GND, OUTPUT);
   digitalWrite(RELAY_GND, HIGH);
 
@@ -393,7 +384,6 @@ void setup() {
   pubSubSetup();
 }
 
-long memdelay = 0;
 void loop() {
   if(configMode) {
     return;
@@ -402,10 +392,4 @@ void loop() {
   pubSub->loop();
   triggerLoop();
   readDoorLoop();
-
-  long memnow = millis();
-  if(memnow - memdelay > 1000) {
-    Serial.println(ESP.getFreeHeap());
-    memdelay = memnow;
-  }
 }
