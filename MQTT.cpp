@@ -1,12 +1,11 @@
 #include "MQTT.h"
-#include "Syslogger.h"
 #include <mDNSResolver.h>
 
 WiFiClient wifi;
 WiFiClientSecure secureWifi;
 PubSubClient client;
-WiFiUDP udp;
 
+WiFiUDP udp;
 mDNSResolver::Resolver resolver(udp);
 
 PubSub::PubSub(char *server, int port, bool tls, char *deviceName) {  

@@ -4,8 +4,8 @@
 #include "Config.h"
 #include "MQTT.h"
 
-#include "Syslogger.h"
-Syslog *Syslogger;
+#include "Syslog.h"
+Syslog Syslogger;
 
 #define CONFIG_AP_SSID "garage"
 
@@ -48,13 +48,13 @@ void pubSubCallback(char* topic, byte* payload, unsigned int length) {
   p[length] = '\0';
 
   if(strcmp(p, CLOSE_COMMAND) == 0) {
-    Syslogger->send(SYSLOG_INFO, "Closing the garage door");
+    Syslogger.send(SYSLOG_INFO, "Closing the garage door");
     closeDoor();
   } else if(strcmp(p, OPEN_COMMAND) == 0) {
-    Syslogger->send(SYSLOG_INFO, "Opening the garage door");
+    Syslogger.send(SYSLOG_INFO, "Opening the garage door");
     openDoor();
   } else if(strcmp(p, STOP_COMMAND) == 0) {
-    Syslogger->send(SYSLOG_INFO, "Stopping the garage door");
+    Syslogger.send(SYSLOG_INFO, "Stopping the garage door");
     stopDoor();
   }
   free(p);
@@ -71,15 +71,19 @@ int getDoorState() {
 void setDoorState(int state) {
   switch(state) {
     case OPENING_STATE:
+      Syslogger.send(SYSLOG_INFO, "Garage Door Opening");
       pubSub->publish(OPENING_PAYLOAD);
       break;
     case CLOSING_STATE:
+      Syslogger.send(SYSLOG_INFO, "Garage Door Closing");
       pubSub->publish(CLOSING_PAYLOAD);
       break;
     case OPEN_STATE:
+      Syslogger.send(SYSLOG_INFO, "Garage Door Open");
       pubSub->publish(OPENED_PAYLOAD);
       break;
     case CLOSED_STATE:
+      Syslogger.send(SYSLOG_INFO, "Garage Door Closed");
       pubSub->publish(CLOSED_PAYLOAD);
       break;
   }
@@ -207,9 +211,9 @@ WiFiUDP syslogSocket;
 void syslogSetup() {
   if(config.get_syslog()) {
     Serial.println("Syslog enabled");
-    Syslogger = new Syslog(syslogSocket, config.get_syslogHost(), config.get_syslogPort(), config.get_deviceName(), config.get_deviceName());
-    Syslogger->setMinimumSeverity(config.get_syslogLevel());
-    Syslogger->send(SYSLOG_INFO, "Device booted.");
+    Syslogger = Syslog(syslogSocket, config.get_syslogHost(), config.get_syslogPort(), config.get_deviceName(), config.get_deviceName());
+    Syslogger.setMinimumSeverity(config.get_syslogLevel());
+    Syslogger.send(SYSLOG_INFO, "Device booted.");
   }
 }
 
@@ -222,37 +226,37 @@ void pubSubSetup() {
 
   pubSub->setAuthMode(config.get_mqttAuthMode());
 
-  Syslogger->send(SYSLOG_INFO, "Loading certificate.");
+  Syslogger.send(SYSLOG_DEBUG, "Loading certificate.");
   pubSub->setFingerprint(config.get_mqttFingerprint());
   
   switch(pubSub->loadCertificate("/client.crt.der")) {
     case E_MQTT_OK:
-      Syslogger->send(SYSLOG_INFO, "Certificate loaded.");
+      Syslogger.send(SYSLOG_DEBUG, "Certificate loaded.");
       break;
     case E_MQTT_CERT_NOT_LOADED:
-      Syslogger->send(SYSLOG_ERROR, "Certificate not loaded.");
+      Syslogger.send(SYSLOG_ERROR, "Certificate not loaded.");
       break;
     case E_MQTT_CERT_FILE_NOT_FOUND:
-      Syslogger->send(SYSLOG_ERROR, "Couldn't find certificate file.");
+      Syslogger.send(SYSLOG_ERROR, "Couldn't find certificate file.");
       break;
     case E_MQTT_SPIFFS:
-      Syslogger->send(SYSLOG_CRITICAL, "Unable to start SPIFFS.");
+      Syslogger.send(SYSLOG_CRITICAL, "Unable to start SPIFFS.");
       break;
   }
   
-  Syslogger->send(SYSLOG_INFO, "Loading private key.");    
+  Syslogger.send(SYSLOG_DEBUG, "Loading private key.");    
   switch(pubSub->loadPrivateKey("/client.key.der")) {
      case E_MQTT_OK:
-      Syslogger->send(SYSLOG_INFO, "Private key loaded.");
+      Syslogger.send(SYSLOG_DEBUG, "Private key loaded.");
       break;
     case E_MQTT_PRIV_KEY_NOT_LOADED:
-      Syslogger->send(SYSLOG_ERROR, "Private key not loaded.");
+      Syslogger.send(SYSLOG_ERROR, "Private key not loaded.");
       break;
     case E_MQTT_PRIV_KEY_FILE_NOT_FOUND:
-      Syslogger->send(SYSLOG_ERROR, "Couldn't find private key file.");
+      Syslogger.send(SYSLOG_ERROR, "Couldn't find private key file.");
       break;
     case E_MQTT_SPIFFS:
-      Syslogger->send(SYSLOG_CRITICAL, "Unable to start SPIFFS.");
+      Syslogger.send(SYSLOG_CRITICAL, "Unable to start SPIFFS.");
       break;
   }
 }
