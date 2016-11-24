@@ -1,8 +1,8 @@
-#include <ESP8266WiFi.h>
 #include <WiFiUdp.h>
 
 #include "Config.h"
 #include "MQTT.h"
+#include "WifiManager.h"
 
 #include "Syslog.h"
 Syslog Syslogger;
@@ -42,8 +42,14 @@ PubSub *pubSub = NULL;
 void closeDoor();
 void openDoor();
 
+WifiManager wifiManager(&config);
+
 void pubSubCallback(char* topic, byte* payload, unsigned int length) {
   char *p = (char *)malloc((length + 1) * sizeof(char *));
+  if(p == NULL) {
+    Syslogger.send(SYSLOG_WARNING, "Unable to read MQTT message: Payload too large.");
+    return;
+  }
   strncpy(p, (char *)payload, length);
   p[length] = '\0';
 
@@ -58,10 +64,6 @@ void pubSubCallback(char* topic, byte* payload, unsigned int length) {
     stopDoor();
   }
   free(p);
-}
-
-void setNetworkName(const char *name) {
-  //wifi_station_set_hostname((char *)name);
 }
 
 int getDoorState() {
@@ -169,42 +171,34 @@ void stopDoor() {
   }
 }
 
-void configSetup() {
-  switch(config.read()) {
+config_result configSetup() {
+  config_result result = config.read();
+  switch(result) {
     case E_CONFIG_OK:
       Serial.println("Config read");
-      return;
+      break;
     case E_CONFIG_FS_ACCESS:
       Serial.println("E_CONFIG_FS_ACCESS: Couldn't access file system");
-      return;
+      break;
     case E_CONFIG_FILE_NOT_FOUND:
       Serial.println("E_CONFIG_FILE_NOT_FOUND: File not found");
-      return;
+      break;
     case E_CONFIG_FILE_OPEN:
       Serial.println("E_CONFIG_FILE_OPEN: Couldn't open file");
-      return;
+      break;
     case E_CONFIG_PARSE_ERROR:
       Serial.println("E_CONFIG_PARSE_ERROR: File was not parsable");
-      return;
+      break;
   }
-}
-
-void saveCallback() {
-  saveFlag = true;
+  return result;
 }
 
 void wifiSetup() {
-  WiFi.disconnect();
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(config.get_ssid(), config.get_passkey());
-  int WiFiCounter = 0;
-  
-  while (WiFi.status() != WL_CONNECTED && WiFiCounter < 30) {
-    delay(1000);
-    WiFiCounter++;
+  while(wifiManager.loop() != E_WIFI_OK) {
+    Serial.println("Could not connect to WiFi. Will try again in 5 seconds");
+    delay(5000);
   }
-  
-  setNetworkName(config.get_deviceName());
+  Serial.println("Connected to WiFi");
 }
 
 WiFiUDP syslogSocket;
@@ -262,8 +256,8 @@ void pubSubSetup() {
 }
 
 void setup() {
-  //Serial.begin(115200);
-  
+  // Serial.begin(115200);
+
   pinMode(RELAY_GND, OUTPUT);
   digitalWrite(RELAY_GND, HIGH);
 
@@ -277,7 +271,12 @@ void setup() {
   digitalWrite(RELAY, LOW);
   digitalWrite(RELAY_GND, LOW);
   
-  configSetup();
+  config_result configResult = configSetup();
+  if(configResult != E_CONFIG_OK) {
+    configMode = true;
+    return;
+  }
+  
   wifiSetup();
   syslogSetup();
   pubSubSetup();
@@ -287,8 +286,10 @@ void loop() {
   if(configMode) {
     return;
   }
-  
-  pubSub->loop();
-  triggerLoop();
-  readDoorLoop();
+
+  if(wifiManager.loop() == E_WIFI_OK) {
+    pubSub->loop();
+    triggerLoop();
+    readDoorLoop();
+  }
 }
