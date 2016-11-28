@@ -155,7 +155,9 @@ mqtt_result PubSub::publish(const char *message) {
 }
 
 long lastConnectionAttempt = 0;
-void PubSub::loop() {  
+mqtt_result PubSub::loop() {  
+  mqtt_result result;
+  
   if(!client.connected()) {
     long now = millis();
 
@@ -165,9 +167,15 @@ void PubSub::loop() {
       if(connectResult == E_MQTT_OK) {
         lastConnectionAttempt = 0;
       }
+      result = connectResult;
+    } else {
+      result = E_MQTT_WAITING;
     }
   } else {
+    result = E_MQTT_OK;
     client.loop();
   }
+
   resolver.loop();
+  return result;
 }

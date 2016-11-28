@@ -48,7 +48,7 @@ class PubSub {
     mqtt_result connect();
     mqtt_result publish(const char *message);
     
-    void loop();
+    mqtt_result loop();
     
     ~PubSub();
     

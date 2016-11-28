@@ -11,8 +11,6 @@ Syslog Syslogger;
 
 #define OPEN_STATE  1
 #define CLOSED_STATE 0
-#define OPENING_STATE 2
-#define CLOSING_STATE 3
 
 #define OPEN_COMMAND "OPEN"
 #define CLOSE_COMMAND "CLOSE"
@@ -26,7 +24,7 @@ Syslog Syslogger;
 #define TLS_NO "0"
 #define TLS_YES "1"
 
-#define RELAY_CLOSE_TIME 100
+#define RELAY_CLOSE_TIME 500
 #define RELAY_GND        0
 #define RELAY            2
 #define OPENED_SWITCH    1
@@ -34,7 +32,7 @@ Syslog Syslogger;
 
 int saveFlag = false;
 bool configMode = false;
-int doorState = CLOSED;
+int doorState = CLOSED_STATE;
 
 Config config;
 PubSub *pubSub = NULL;
@@ -53,6 +51,9 @@ void pubSubCallback(char* topic, byte* payload, unsigned int length) {
   strncpy(p, (char *)payload, length);
   p[length] = '\0';
 
+  Syslogger.send(SYSLOG_DEBUG, "Command Received:");
+  Syslogger.send(SYSLOG_DEBUG, p);
+  
   if(strcmp(p, CLOSE_COMMAND) == 0) {
     Syslogger.send(SYSLOG_INFO, "Closing the garage door");
     closeDoor();
@@ -72,20 +73,12 @@ int getDoorState() {
 
 void setDoorState(int state) {
   switch(state) {
-    case OPENING_STATE:
-      Syslogger.send(SYSLOG_INFO, "Garage Door Opening");
-      pubSub->publish(OPENING_PAYLOAD);
-      break;
-    case CLOSING_STATE:
-      Syslogger.send(SYSLOG_INFO, "Garage Door Closing");
-      pubSub->publish(CLOSING_PAYLOAD);
-      break;
     case OPEN_STATE:
-      Syslogger.send(SYSLOG_INFO, "Garage Door Open");
+      Syslogger.send(SYSLOG_INFO, "Garage Door is Open");
       pubSub->publish(OPENED_PAYLOAD);
       break;
     case CLOSED_STATE:
-      Syslogger.send(SYSLOG_INFO, "Garage Door Closed");
+      Syslogger.send(SYSLOG_INFO, "Garage Door is Closed");
       pubSub->publish(CLOSED_PAYLOAD);
       break;
   }
@@ -110,65 +103,49 @@ void trigger() {
   triggerStart = millis();
 }
 
+void notifyInitialDoorState() {
+  int closed = !digitalRead(CLOSED_SWITCH);
+
+  if(closed) {
+    setDoorState(CLOSED_STATE);
+  } else {
+    setDoorState(OPEN_STATE);
+  }
+}
+
 void readDoorLoop() {
   int current = getDoorState();
   // Inverted because we pull them low when switches are closed
-  int opened = !digitalRead(OPENED_SWITCH);
   int closed = !digitalRead(CLOSED_SWITCH);
   
-  if(opened && !closed) {
+  if(closed) {
     // Fully opened
-    if(current != OPEN_STATE) {
-      setDoorState(OPEN_STATE);
-    }
-  } else if(!opened && closed) {
-    // Fully closed
     if(current != CLOSED_STATE) {
       setDoorState(CLOSED_STATE);
     }
-  } else if(!opened && !closed) {
-    // Either opening or closing
-    if(current == OPEN_STATE) {
-      setDoorState(CLOSING_STATE);
-    } else if(current == CLOSED_STATE) {
-      setDoorState(OPENING_STATE);
+  } else {
+    if(current != OPEN_STATE) {
+      setDoorState(OPEN_STATE);
     }
   }
 }
 
 void openDoor() {
   int current = getDoorState();
-  if(current != OPEN_STATE && current != OPENING_STATE) {
+  if(current != OPEN_STATE) {
     trigger();
-
-    // If the door wasn't fully open, switch the state, as we have no sensor that can do that.
-    if(current == OPENING_STATE) {
-      setDoorState(CLOSING_STATE);
-    }
   }
 }
 
 void closeDoor() {
   int current = getDoorState();
-  if(current != CLOSED_STATE && current != CLOSING_STATE) {
+  if(current != CLOSED_STATE) {
     trigger();
-
-    // If the door wasn't fully closed, switch the state, as we have no sensor that can do that.
-    if(current == CLOSING_STATE) {
-      setDoorState(OPENING_STATE);
-    }
   }
 }
 
 void stopDoor() {
-  int current = getDoorState();
-
-  // Triggering again, stops the door. If we are already stopped
-  // Don't do anything.
-  if(current != CLOSED_STATE && current != OPEN_STATE) {
-    trigger();
-    setDoorState(OPEN_STATE);  
-  }
+  trigger();
 }
 
 config_result configSetup() {
@@ -265,8 +242,7 @@ void setup() {
   digitalWrite(RELAY, HIGH);
   
   pinMode(CLOSED_SWITCH, INPUT);
-  pinMode(OPENED_SWITCH, INPUT);
-  
+ 
   
   digitalWrite(RELAY, LOW);
   digitalWrite(RELAY_GND, LOW);
@@ -280,16 +256,23 @@ void setup() {
   wifiSetup();
   syslogSetup();
   pubSubSetup();
+  Syslogger.send(SYSLOG_DEBUG, "Ready for commands");
 }
 
+bool firstRun = true;
 void loop() {
   if(configMode) {
+    Syslogger.send(SYSLOG_DEBUG, "Config mode");
     return;
   }
 
-  if(wifiManager.loop() == E_WIFI_OK) {
-    pubSub->loop();
-    triggerLoop();
+  if(wifiManager.loop() == E_WIFI_OK && pubSub->loop() == E_MQTT_OK) {
+    if(firstRun) {
+      notifyInitialDoorState();
+      firstRun = false;
+      Syslogger.send(SYSLOG_DEBUG, "MQTT Server initialised with initial state");
+    }
     readDoorLoop();
+    triggerLoop();
   }
 }
