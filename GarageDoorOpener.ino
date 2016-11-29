@@ -3,6 +3,7 @@
 #include "Config.h"
 #include "MQTT.h"
 #include "WifiManager.h"
+#include "ConfigManager.h"
 
 #include "Syslog.h"
 Syslog Syslogger;
@@ -30,8 +31,6 @@ Syslog Syslogger;
 #define OPENED_SWITCH    1
 #define CLOSED_SWITCH    3
 
-int saveFlag = false;
-bool configMode = false;
 int doorState = CLOSED_STATE;
 
 Config config;
@@ -41,6 +40,7 @@ void closeDoor();
 void openDoor();
 
 WifiManager wifiManager(&config);
+ConfigManager configManager(&config);
 
 void pubSubCallback(char* topic, byte* payload, unsigned int length) {
   char *p = (char *)malloc((length + 1) * sizeof(char *));
@@ -148,28 +148,6 @@ void stopDoor() {
   trigger();
 }
 
-config_result configSetup() {
-  config_result result = config.read();
-  switch(result) {
-    case E_CONFIG_OK:
-      Serial.println("Config read");
-      break;
-    case E_CONFIG_FS_ACCESS:
-      Serial.println("E_CONFIG_FS_ACCESS: Couldn't access file system");
-      break;
-    case E_CONFIG_FILE_NOT_FOUND:
-      Serial.println("E_CONFIG_FILE_NOT_FOUND: File not found");
-      break;
-    case E_CONFIG_FILE_OPEN:
-      Serial.println("E_CONFIG_FILE_OPEN: Couldn't open file");
-      break;
-    case E_CONFIG_PARSE_ERROR:
-      Serial.println("E_CONFIG_PARSE_ERROR: File was not parsable");
-      break;
-  }
-  return result;
-}
-
 void wifiSetup() {
   while(wifiManager.loop() != E_WIFI_OK) {
     Serial.println("Could not connect to WiFi. Will try again in 5 seconds");
@@ -233,8 +211,13 @@ void pubSubSetup() {
 }
 
 void setup() {
-  // Serial.begin(115200);
+  // Un comment to go into config mode
+  // In the final version, this will happen automatically if there is a flag file present on the FS
+  // configManager.setConfigMode();
 
+  Serial.begin(115200);
+
+  /*
   pinMode(RELAY_GND, OUTPUT);
   digitalWrite(RELAY_GND, HIGH);
 
@@ -246,26 +229,24 @@ void setup() {
   
   digitalWrite(RELAY, LOW);
   digitalWrite(RELAY_GND, LOW);
+  */
   
-  config_result configResult = configSetup();
-  if(configResult != E_CONFIG_OK) {
-    configMode = true;
-    return;
+  config_result configResult = configManager.setup();
+  
+  if(configResult == E_CONFIG_OK) {
+    wifiSetup();
+    syslogSetup();
+    pubSubSetup();
+    Syslogger.send(SYSLOG_DEBUG, "Ready for commands");
   }
-  
-  wifiSetup();
-  syslogSetup();
-  pubSubSetup();
-  Syslogger.send(SYSLOG_DEBUG, "Ready for commands");
 }
 
 bool firstRun = true;
 void loop() {
-  if(configMode) {
-    Syslogger.send(SYSLOG_DEBUG, "Config mode");
-    return;
+  if(configManager.configMode()) {
+    return configManager.loop();
   }
-
+  
   if(wifiManager.loop() == E_WIFI_OK && pubSub->loop() == E_MQTT_OK) {
     if(firstRun) {
       notifyInitialDoorState();
